@@ -7,68 +7,86 @@ use Illuminate\Http\Request;
 
 class ProveedorController extends Controller
 {
-    // LISTA: muestra todos los proveedores
+    /**
+     * Mostrar todos los proveedores
+     */
     public function index()
     {
-        // Paginamos para no traer todo de golpe
-        $proveedores = Proveedor::orderBy('nombre')->paginate(10);
-        return view('proveedores.index', compact('proveedores'));
+        // Trae todos los proveedores (sin incluir los eliminados)
+        $proveedors = Proveedor::all();
+        return view('proveedors.index', compact('proveedors'));
     }
 
-    // FORMULARIO: crear nuevo proveedor
+    /**
+     * Mostrar formulario para crear un nuevo proveedor
+     */
     public function create()
     {
-        return view('proveedores.create');
+        // Solo devuelve la vista del formulario
+        return view('proveedors.create');
     }
 
-    // GUARDAR: recibe el POST del formulario de create
+    /**
+     * Guardar el nuevo proveedor en la base de datos
+     */
     public function store(Request $request)
     {
-        // Validación mínima (explica al usuario si falta algo)
-        $data = $request->validate([
-            'nombre'    => 'required|string|max:255',
-            'telefono'  => 'nullable|string|max:30',
-            'correo'    => 'nullable|email|max:255',
+        // Validación de los datos del formulario
+        $request->validate([
+            'nombre' => 'required|string|max:255|unique:proveedors,nombre',
+            'telefono' => 'nullable|string|max:50',
+            'correo' => 'nullable|email|max:255',
             'direccion' => 'nullable|string|max:255',
-            'notas'     => 'nullable|string',
+            'notas' => 'nullable|string',
         ]);
 
-        Proveedor::create($data);
-        return redirect()->route('proveedores.index')->with('ok', 'Proveedor creado correctamente.');
+        // Crea el registro en la base de datos
+        Proveedor::create($request->all());
+
+        // Redirige a la lista con mensaje de éxito
+        return redirect()->route('proveedors.index')->with('success', 'Proveedor agregado correctamente.');
     }
 
-    // FORMULARIO: editar existente
-    public function edit(Proveedor $proveedore)
+    /**
+     * Mostrar los detalles de un proveedor
+     */
+    public function show(Proveedor $proveedor)
     {
-        // Tip: el nombre del parámetro es $proveedore porque Laravel pluraliza raro `proveedors` -> {proveedore}
-        return view('proveedores.edit', ['proveedor' => $proveedore]);
+        return view('proveedors.show', compact('proveedor'));
     }
 
-    // ACTUALIZAR: recibe el POST del formulario de edit
-    public function update(Request $request, Proveedor $proveedore)
+    /**
+     * Mostrar formulario de edición
+     */
+    public function edit(Proveedor $proveedor)
     {
-        $data = $request->validate([
-            'nombre'    => 'required|string|max:255',
-            'telefono'  => 'nullable|string|max:30',
-            'correo'    => 'nullable|email|max:255',
+        return view('proveedors.edit', compact('proveedor'));
+    }
+
+    /**
+     * Actualizar datos del proveedor
+     */
+    public function update(Request $request, Proveedor $proveedor)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:255|unique:proveedors,nombre,' . $proveedor->id,
+            'telefono' => 'nullable|string|max:50',
+            'correo' => 'nullable|email|max:255',
             'direccion' => 'nullable|string|max:255',
-            'notas'     => 'nullable|string',
+            'notas' => 'nullable|string',
         ]);
 
-        $proveedore->update($data);
-        return redirect()->route('proveedores.index')->with('ok', 'Proveedor actualizado.');
+        $proveedor->update($request->all());
+
+        return redirect()->route('proveedors.index')->with('success', 'Proveedor actualizado correctamente.');
     }
 
-    // ELIMINAR: borra un proveedor
-    public function destroy(Proveedor $proveedore)
+    /**
+     * Eliminar proveedor (soft delete)
+     */
+    public function destroy(Proveedor $proveedor)
     {
-        $proveedore->delete();
-        return redirect()->route('proveedores.index')->with('ok', 'Proveedor eliminado.');
-    }
-
-    // (Opcional) VER DETALLE
-    public function show(Proveedor $proveedore)
-    {
-        return view('proveedores.show', ['proveedor' => $proveedore]);
+        $proveedor->delete();
+        return redirect()->route('proveedors.index')->with('success', 'Proveedor eliminado correctamente.');
     }
 }

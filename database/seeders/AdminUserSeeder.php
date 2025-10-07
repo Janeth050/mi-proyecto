@@ -10,13 +10,13 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Si ya existe el correo, lo actualiza; si no, lo crea.
         User::updateOrCreate(
             ['email' => 'admin@panaderia.local'],
             [
-                'name' => 'Administrador',
-                'password' => Hash::make('Admin123*'), // SIEMPRE con hash
-                'role' => 'admin',
+                'name'              => 'Administrador',
+                'password'          => Hash::make('Admin123*'),
+                'role'              => 'admin',
+                'email_verified_at' => now(),
             ]
         );
     }
