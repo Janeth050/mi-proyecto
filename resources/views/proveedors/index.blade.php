@@ -1,180 +1,87 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Lista de Proveedores</title>
-  <style>
-    :root {
-      --cafe: #8b5e3c;
-      --beige: #f9f3e9;
-      --texto: #5c3a21;
-      --borde: #d9c9b3;
-      --hover: #70472e;
-    }
+@extends('layouts.app')
 
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: var(--beige);
-      color: var(--texto);
-      margin: 0;
-      padding: 0;
-    }
+@section('title','Proveedores')
 
-    h1 {
-      text-align: center;
-      color: var(--cafe);
-      margin: 25px 0;
-    }
+@section('content')
+<style>
+  :root{--cafe:#8b5e3c;--hover:#70472e;--texto:#5c3a21;--borde:#d9c9b3}
+  h1.page{color:var(--cafe);margin:0 0 14px;font-size:32px;font-weight:800}
 
-    .contenedor {
-      width: 90%;
-      margin: 0 auto;
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      border: 1px solid var(--borde);
-    }
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none}
+  .btn-primary{background:var(--cafe);color:#fff}.btn-primary:hover{background:var(--hover)}
+  .btn-back{background:#fff;border:1px solid var(--borde);color:#70472e}.btn-back:hover{background:#f2e8db}
+  .btn-danger{background:#e74c3c;color:#fff}.btn-danger:hover{background:#c0392b}
+  .pill{padding:8px 12px;border-radius:10px;border:1px solid var(--borde);background:#fff;color:#70472e;font-weight:700;text-decoration:none}
+  .pill:hover{background:#f2e8db}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 15px;
-    }
+  .card{background:#fff;border:1px solid var(--borde);border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.06);padding:16px}
+  .flash{background:#d4edda;color:#155724;border:1px solid #c3e6cb;padding:10px;border-radius:10px;margin-bottom:10px}
 
-    th, td {
-      border: 1px solid var(--borde);
-      padding: 10px;
-      text-align: center;
-      font-size: 15px;
-    }
+  .table{width:100%;border-collapse:collapse}
+  .table th,.table td{border:1px solid var(--borde);padding:10px;text-align:center}
+  .table th{background:#8b5e3c;color:#fff}
+  .table tr:nth-child(even){background:#faf6ef}
 
-    th {
-      background-color: var(--cafe);
-      color: white;
-    }
+  @media(max-width:760px){
+    .table thead{display:none}
+    .table tr{display:block;border:1px solid var(--borde);margin-bottom:10px;border-radius:10px;overflow:hidden}
+    .table td{display:flex;justify-content:space-between;gap:12px;border:none;border-bottom:1px solid #eee}
+    .table td:last-child{border-bottom:none}
+    .table td::before{content:attr(data-label);font-weight:700;color:#7a6b5f}
+  }
+</style>
 
-    tr:nth-child(even) {
-      background-color: #f7efe2;
-    }
+<h1 class="page">Proveedores</h1>
 
-    a.boton {
-      background: var(--cafe);
-      color: white;
-      padding: 6px 10px;
-      border-radius: 6px;
-      text-decoration: none;
-      font-size: 14px;
-    }
+<div class="toolbar">
+  <a class="btn btn-primary" href="{{ route('proveedors.create') }}"> Nuevo proveedor</a>
+</div>
 
-    a.boton:hover {
-      background: var(--hover);
-    }
+@if(session('success')) <div class="flash">{{ session('success') }}</div> @endif
+@if(session('error'))   <div class="flash" style="background:#f8d7da;color:#721c24;border-color:#f5c6cb">{{ session('error') }}</div> @endif
 
-    .acciones {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-    }
+<div class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Nombre</th>
+        <th>Teléfono</th>
+        <th>Correo</th>
+        <th>Dirección</th>
+        <th>Notas</th>
+        <th style="min-width:220px">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      @forelse($proveedors as $prov)
+      <tr>
+        <td data-label="#"> {{ $prov->id }}</td>
+        <td data-label="Nombre">{{ $prov->nombre }}</td>
+        <td data-label="Teléfono">{{ $prov->telefono ?? '—' }}</td>
+        <td data-label="Correo">{{ $prov->correo ?? '—' }}</td>
+        <td data-label="Dirección">{{ $prov->direccion ?? '—' }}</td>
+        <td data-label="Notas">{{ $prov->notas ?? '—' }}</td>
+        <td data-label="Acciones" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <a class="pill" href="{{ route('proveedors.edit',$prov->id) }}">Editar</a>
+          <form action="{{ route('proveedors.destroy',$prov->id) }}" method="POST"
+                onsubmit="return confirm('¿Eliminar proveedor {{ $prov->nombre }}?')">
+            @csrf @method('DELETE')
+            <button type="submit" class="btn btn-danger">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      @empty
+      <tr><td colspan="7" style="text-align:center;color:#7a6b5f">No hay proveedores registrados.</td></tr>
+      @endforelse
+    </tbody>
+  </table>
+</div>
 
-    form {
-      display: inline;
-    }
-
-    button {
-      background: #c0392b;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 6px 10px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    button:hover {
-      background: #a93226;
-    }
-
-    .nuevo {
-      display: inline-block;
-      margin-bottom: 15px;
-      background: var(--cafe);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
-      text-decoration: none;
-    }
-
-    .nuevo:hover {
-      background: var(--hover);
-    }
-
-    .mensaje {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-      padding: 10px;
-      border-radius: 6px;
-      margin-bottom: 15px;
-      text-align: center;
-    }
-  </style>
-</head>
-<body>
-
-  <h1>Lista de Proveedores</h1>
-
-  <div class="contenedor">
-    {{-- Mensaje de éxito --}}
-    @if (session('success'))
-      <div class="mensaje">
-        {{ session('success') }}
-      </div>
-    @endif
-
-    {{-- Botón para agregar nuevo proveedor --}}
-    <a href="{{ route('proveedors.create') }}" class="nuevo">+ Nuevo proveedor</a>
-
-    {{-- Tabla de proveedores --}}
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Nombre</th>
-          <th>Teléfono</th>
-          <th>Correo</th>
-          <th>Dirección</th>
-          <th>Notas</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        @forelse ($proveedors as $proveedor)
-          <tr>
-            <td>{{ $proveedor->id }}</td>
-            <td>{{ $proveedor->nombre }}</td>
-            <td>{{ $proveedor->telefono ?? '-' }}</td>
-            <td>{{ $proveedor->correo ?? '-' }}</td>
-            <td>{{ $proveedor->direccion ?? '-' }}</td>
-            <td>{{ $proveedor->notas ?? '-' }}</td>
-            <td class="acciones">
-              <a href="{{ route('proveedors.edit', $proveedor->id) }}" class="boton">Editar</a>
-
-              <form action="{{ route('proveedors.destroy', $proveedor->id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este proveedor?');">
-                @csrf
-                @method('DELETE')
-                <button type="submit">Eliminar</button>
-              </form>
-            </td>
-          </tr>
-        @empty
-          <tr>
-            <td colspan="7">No hay proveedores registrados aún.</td>
-          </tr>
-        @endforelse
-      </tbody>
-    </table>
+@if(method_exists($proveedors,'links'))
+  <div style="margin-top:12px">
+    {{ $proveedors->links() }}
   </div>
-
-</body>
-</html>
+@endif
+@endsection

@@ -1,135 +1,132 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Movimientos de Inventario</title>
-  <style>
-    :root {
-      --cafe:#8b5e3c; --beige:#f9f3e9; --texto:#5c3a21; --borde:#d9c9b3; --hover:#70472e;
-      --ok:#2ecc71; --warn:#f1c40f; --bad:#e74c3c; --chip:#ffffff;
-    }
-    *{box-sizing:border-box}
-    body{font-family:'Segoe UI',sans-serif;background:var(--beige);color:var(--texto);margin:0}
-    h1{text-align:center;color:var(--cafe);margin:24px 0}
-    .wrap{width:95%;max-width:1200px;margin:0 auto 28px;background:#fff;border:1px solid var(--borde);
-          border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.08);padding:16px}
-    .topbar{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
-    .acciones a, .acciones button, .btn{background:var(--cafe);color:#fff;border:none;border-radius:8px;
-          padding:8px 12px;text-decoration:none;cursor:pointer}
-    .btn:hover,.acciones button:hover,.acciones a:hover{background:var(--hover)}
-    .mensaje{background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:8px;padding:10px;margin-bottom:12px;text-align:center}
-    .filtros{display:flex;gap:8px;flex-wrap:wrap}
-    .filtros input, .filtros select{border:1px solid var(--borde);border-radius:8px;padding:8px 10px}
-    table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{border:1px solid var(--borde);padding:10px;text-align:center}
-    th{background:var(--cafe);color:#fff;position:sticky;top:0}
-    tr:nth-child(even){background:#f7efe2}
-    .chip{display:inline-block;padding:4px 10px;border-radius:999px;background:var(--chip);border:1px solid var(--borde);font-weight:600}
-    .entrada{border-color:var(--ok);color:var(--ok)}
-    .salida{border-color:var(--bad);color:var(--bad)}
-    .pendiente{border-color:var(--warn);color:#9a7d0a}
-    .confirmado{border-color:var(--ok);color:var(--ok)}
-    .cancelado{border-color:var(--bad);color:var(--bad)}
-    .acciones{display:flex;gap:8px;justify-content:center;align-items:center}
-    form{display:inline}
-  </style>
-</head>
-<body>
+@extends('layouts.app')
 
-  <h1>Movimientos de Inventario</h1>
+@section('title','Movimientos')
 
-  <div class="wrap">
-    {{-- Mensaje de éxito --}}
-    @if(session('success'))
-      <div class="mensaje">{{ session('success') }}</div>
-    @endif
+@section('content')
+<style>
+  :root{
+    --cafe:#8b5e3c;--hover:#70472e;--texto:#5c3a21;--borde:#d9c9b3;
+    --ok:#2ecc71;--warn:#f1c40f;--bad:#e74c3c;
+  }
+  h1.page{color:var(--cafe);margin:0 0 14px;font-size:32px;font-weight:800}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none}
+  .btn-primary{background:var(--cafe);color:#fff}.btn-primary:hover{background:var(--hover)}
+  .btn-back{background:#fff;border:1px solid var(--borde);color:#70472e}.btn-back:hover{background:#f2e8db}
+  .btn-gray{background:#6c757d;color:#fff}.btn-gray:hover{background:#5a6268}
+  .btn-cancel{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+  .btn-cancel:hover{background:#f1b0b7}
+  .card{background:#fff;border:1px solid var(--borde);border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.06);padding:16px}
+  .flash{background:#d4edda;color:#155724;border:1px solid #c3e6cb;padding:10px;border-radius:10px;margin-bottom:10px;text-align:center}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .filters select,.filters input{border:1px solid var(--borde);border-radius:10px;padding:8px 10px}
+  .table{width:100%;border-collapse:collapse}
+  .table th,.table td{border:1px solid var(--borde);padding:10px;text-align:center}
+  .table th{background:var(--cafe);color:#fff}
+  .table tr:nth-child(even){background:#faf6ef}
+  .chip{display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid var(--borde);font-weight:600}
+  .entrada{border-color:var(--ok);color:var(--ok)}
+  .salida{border-color:var(--bad);color:var(--bad)}
+  .pendiente{border-color:var(--warn);color:#9a7d0a}
+  .confirmado{border-color:var(--ok);color:var(--ok)}
+  .cancelado{border-color:var(--bad);color:var(--bad);background:#fcebea}
+  @media(max-width:760px){
+    .table thead{display:none}
+    .table tr{display:block;border:1px solid var(--borde);margin-bottom:10px;border-radius:10px;overflow:hidden}
+    .table td{display:flex;justify-content:space-between;gap:12px;border:none;border-bottom:1px solid #eee}
+    .table td:last-child{border-bottom:none}
+    .table td::before{content:attr(data-label);font-weight:700;color:#7a6b5f}
+  }
+</style>
 
-    <div class="topbar">
-      <div class="filtros">
-        {{-- Filtros simples (opcionales, no rompen nada si no los usas aún) --}}
-        <form action="{{ route('movimientos.index') }}" method="GET" style="display:flex;gap:8px;flex-wrap:wrap">
-          <select name="tipo">
-            <option value="">Tipo (todos)</option>
-            <option value="entrada" {{ request('tipo')=='entrada'?'selected':'' }}>Entradas</option>
-            <option value="salida"  {{ request('tipo')=='salida'?'selected':''  }}>Salidas</option>
-          </select>
+<h1 class="page">Movimientos de Inventario</h1>
 
-          <select name="status">
-            <option value="">Estatus (todos)</option>
-            <option value="pendiente"  {{ request('status')=='pendiente'?'selected':'' }}>Pendiente</option>
-            <option value="confirmado" {{ request('status')=='confirmado'?'selected':'' }}>Confirmado</option>
-            <option value="cancelado"  {{ request('status')=='cancelado'?'selected':'' }}>Cancelado</option>
-          </select>
+<div class="toolbar">
+  <form action="{{ route('movimientos.index') }}" method="GET" class="filters">
+    <select name="tipo">
+      <option value="">Tipo (todos)</option>
+      <option value="entrada" {{ request('tipo')=='entrada'?'selected':'' }}>Entradas</option>
+      <option value="salida"  {{ request('tipo')=='salida'?'selected':''  }}>Salidas</option>
+    </select>
 
-          <input type="text" name="q" placeholder="Buscar por producto/usuario"
-                 value="{{ request('q') }}" />
+    <select name="status">
+      <option value="">Estatus (todos)</option>
+      <option value="pendiente"  {{ request('status')=='pendiente'?'selected':'' }}>Pendiente</option>
+      <option value="confirmado" {{ request('status')=='confirmado'?'selected':'' }}>Confirmado</option>
+      <option value="cancelado"  {{ request('status')=='cancelado'?'selected':'' }}>Cancelado</option>
+    </select>
 
-          <button class="btn" type="submit">Filtrar</button>
-          <a class="btn" href="{{ route('movimientos.index') }}" style="background:#6c757d">Limpiar</a>
-        </form>
-      </div>
+    <input type="text" name="q" placeholder="Buscar producto o usuario" value="{{ request('q') }}">
+    <button type="submit" class="btn btn-primary"> Filtrar</button>
+    <a href="{{ route('movimientos.index') }}" class="btn btn-gray">Limpiar</a>
+  </form>
 
-      <a class="btn" href="{{ route('movimientos.create') }}">+ Registrar movimiento</a>
-    </div>
-
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Producto</th>
-          <th>Tipo</th>
-          <th>Cantidad</th>
-          <th>Existencia después</th>
-          <th>Usuario</th>
-          <th>Proveedor</th>
-          <th>Costo total</th>
-          <th>Estatus</th>
-          <th>Fecha</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        @forelse($movimientos as $mov)
-          <tr>
-            <td>{{ $mov->id }}</td>
-            <td>{{ $mov->producto->nombre ?? '—' }}</td>
-            <td>
-              <span class="chip {{ $mov->tipo }}">
-                {{ ucfirst($mov->tipo) }}
-              </span>
-            </td>
-            <td>{{ $mov->cantidad }}</td>
-            <td>{{ $mov->existencias_despues }}</td>
-            <td>{{ $mov->usuario->name ?? '—' }}</td>
-            <td>{{ $mov->proveedor->nombre ?? '—' }}</td>
-            <td>
-              @if(!is_null($mov->costo_total))
-                ${{ number_format($mov->costo_total, 2) }}
-              @else
-                —
-              @endif
-            </td>
-            <td>
-              <span class="chip {{ $mov->status }}">
-                {{ ucfirst($mov->status) }}
-              </span>
-            </td>
-            <td>{{ $mov->created_at->format('d/m/Y H:i') }}</td>
-            <td class="acciones">
-              {{-- Ver (opcional si usas movimientos.show) --}}
-              @if(Route::has('movimientos.show'))
-                <a class="btn" href="{{ route('movimientos.show', $mov->id) }}">Ver</a>
-              @endif
-              {{-- Aquí podrías agregar acciones de cancelar/confirmar si las implementas luego --}}
-            </td>
-          </tr>
-        @empty
-          <tr>
-            <td colspan="11">No hay movimientos registrados.</td>
-          </tr>
-        @endforelse
-      </tbody>
-    </table>
+  <div style="display:flex;gap:8px;">
+    <a class="btn btn-primary" href="{{ route('movimientos.create') }}">Nuevo movimiento</a>
   </div>
-</body>
-</html>
+</div>
+
+@if(session('success'))
+  <div class="flash">{{ session('success') }}</div>
+@endif
+@if(session('error'))
+  <div class="flash" style="background:#f8d7da;color:#721c24;border-color:#f5c6cb">{{ session('error') }}</div>
+@endif
+
+<div class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th><th>Producto</th><th>Tipo</th><th>Cantidad</th>
+        <th>Existencia después</th><th>Usuario</th><th>Proveedor</th>
+        <th>Costo total</th><th>Estatus</th><th>Fecha</th><th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      @forelse($movimientos as $m)
+        <tr>
+          <td data-label="ID">{{ $m->id }}</td>
+          <td data-label="Producto">{{ $m->producto->nombre ?? '—' }}</td>
+          <td data-label="Tipo"><span class="chip {{ $m->tipo }}">{{ ucfirst($m->tipo) }}</span></td>
+          <td data-label="Cantidad">{{ $m->cantidad }}</td>
+          <td data-label="Existencia después">{{ $m->existencias_despues }}</td>
+          <td data-label="Usuario">{{ $m->usuario->name ?? '—' }}</td>
+          <td data-label="Proveedor">{{ $m->proveedor->nombre ?? '—' }}</td>
+          <td data-label="Costo total">
+            @if($m->costo_total)
+              ${{ number_format($m->costo_total,2) }}
+            @else
+              —
+            @endif
+          </td>
+          <td data-label="Estatus">
+            <span class="chip {{ $m->status }}">{{ ucfirst($m->status) }}</span>
+          </td>
+          <td data-label="Fecha">{{ $m->created_at->format('d/m/Y H:i') }}</td>
+
+          <td data-label="Acciones" style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+            @if($m->status !== 'cancelado')
+              <form action="{{ route('movimientos.cancelar', $m->id) }}" method="POST"
+                    onsubmit="return confirm('¿Cancelar este movimiento? Esto revertirá el stock.')">
+                @csrf
+                <button type="submit" class="btn btn-cancel">Cancelar</button>
+              </form>
+            @else
+              <span style="color:#999;">—</span>
+            @endif
+          </td>
+        </tr>
+      @empty
+        <tr><td colspan="11" style="text-align:center;color:#7a6b5f">No hay movimientos registrados.</td></tr>
+      @endforelse
+    </tbody>
+  </table>
+</div>
+
+@if(method_exists($movimientos,'links'))
+  <div style="margin-top:12px">
+    {{ $movimientos->links() }}
+  </div>
+@endif
+@endsection
+

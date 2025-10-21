@@ -13,6 +13,8 @@ class UnidadSeeder extends Seeder
             ['clave' => 'costal', 'descripcion' => 'Costal'],
             ['clave' => 'caja',   'descripcion' => 'Caja'],
             ['clave' => 'pza',    'descripcion' => 'Pieza'],
+            ['clave' => 'kg',     'descripcion' => 'Kilogramo'],
+            ['clave' => 'lt',     'descripcion' => 'Litro'],
         ];
 
         foreach ($rows as $r) {

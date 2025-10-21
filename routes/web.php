@@ -10,6 +10,7 @@ use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\KardexController;
 use App\Http\Controllers\ListaPedidoController;
 use App\Http\Controllers\ListaPedidoItemController;
+use App\Http\Controllers\UsuarioController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,15 +44,7 @@ Route::middleware(['auth'])->group(function () {
     /*
     |----------------------------------------------------------------------
     | Productos (CRUD)
-    |----------------------------------------------------------------------
-    | GET    /productos              -> productos.index
-    | GET    /productos/create       -> productos.create
-    | POST   /productos              -> productos.store
-    | GET    /productos/{id}         -> productos.show
-    | GET    /productos/{id}/edit    -> productos.edit
-    | PUT    /productos/{id}         -> productos.update
-    | DELETE /productos/{id}         -> productos.destroy
-    */
+    |----------------------------------------------------------------------*/
     Route::resource('productos', ProductoController::class);
 
     /*
@@ -67,7 +60,8 @@ Route::middleware(['auth'])->group(function () {
     |----------------------------------------------------------------------
     */
     Route::resource('movimientos', MovimientoController::class)->only(['index','create','store','show']);
-
+    // Cancelar (POST por seguridad CSRF)
+    Route::post('movimientos/{movimiento}/cancelar', [MovimientoController::class, 'cancelar'])->name('movimientos.cancelar');
     /*
     |----------------------------------------------------------------------
     | Kardex (histórico por producto y global con filtros)
@@ -91,6 +85,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post  ('listas/{lista}/items',               [ListaPedidoItemController::class, 'store' ]) ->name('listas.items.store');
     Route::put   ('listas/{lista}/items/{item}',        [ListaPedidoItemController::class, 'update']) ->name('listas.items.update');
     Route::delete('listas/{lista}/items/{item}',        [ListaPedidoItemController::class, 'destroy'])->name('listas.items.destroy');
+
+     // Usuarios (solo admin) - el propio controlador ya bloquea con adminOnly()
+    Route::resource('usuarios', UsuarioController::class)
+        ->parameters(['usuarios' => 'usuario'])
+        ->except(['show']);
 });
 
 /*

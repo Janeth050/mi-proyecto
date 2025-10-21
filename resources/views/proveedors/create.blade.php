@@ -1,115 +1,61 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Agregar Proveedor</title>
-  <style>
-    :root {
-      --cafe: #8b5e3c;
-      --beige: #f9f3e9;
-      --texto: #5c3a21;
-      --borde: #d9c9b3;
-      --hover: #70472e;
-    }
+@extends('layouts.app')
 
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: var(--beige);
-      color: var(--texto);
-      margin: 0;
-      padding: 0;
-    }
+@section('title','Nuevo proveedor')
 
-    h1 {
-      text-align: center;
-      color: var(--cafe);
-      margin-top: 30px;
-    }
+@section('content')
+<style>
+  :root{--cafe:#8b5e3c;--hover:#70472e;--borde:#d9c9b3}
+  h1.page{color:var(--cafe);margin:0 0 14px;font-size:32px;font-weight:800}
+  .card{background:#fff;border:1px solid var(--borde);border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.06);padding:16px;max-width:760px}
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .form .full{grid-column:1 / -1}
+  label{font-weight:700;color:#5c3a21}
+  input,textarea{width:100%;padding:10px;border:1px solid var(--borde);border-radius:10px}
+  textarea{min-height:90px;resize:vertical}
+  .errors{color:#c0392b;font-size:13px;margin-top:4px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none}
+  .btn-primary{background:var(--cafe);color:#fff}.btn-primary:hover{background:var(--hover)}
+  .btn-back{background:#fff;border:1px solid var(--borde);color:#70472e}.btn-back:hover{background:#f2e8db}
+  @media(max-width:700px){ .form{grid-template-columns:1fr} }
+</style>
 
-    form {
-      max-width: 600px;
-      background: white;
-      margin: 30px auto;
-      padding: 25px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      border: 1px solid var(--borde);
-    }
+<h1 class="page">Registrar nuevo proveedor</h1>
 
-    label {
-      display: block;
-      margin-top: 12px;
-      font-weight: 600;
-    }
-
-    input, textarea {
-      width: 100%;
-      padding: 10px;
-      margin-top: 6px;
-      border: 1px solid var(--borde);
-      border-radius: 6px;
-      font-size: 15px;
-    }
-
-    button {
-      background: var(--cafe);
-      color: white;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 6px;
-      margin-top: 20px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    button:hover {
-      background: var(--hover);
-    }
-
-    a {
-      display: inline-block;
-      margin-top: 15px;
-      color: var(--cafe);
-      text-decoration: none;
-    }
-
-    a:hover {
-      text-decoration: underline;
-    }
-
-    .error {
-      color: red;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-
-  <h1>Registrar Nuevo Proveedor</h1>
-
-  <form action="{{ route('proveedors.store') }}" method="POST">
+<div class="card">
+  <form class="form" action="{{ route('proveedors.store') }}" method="POST">
     @csrf
 
-    <label for="nombre">Nombre del proveedor:</label>
-    <input type="text" name="nombre" id="nombre" value="{{ old('nombre') }}" required>
-    @error('nombre') <div class="error">{{ $message }}</div> @enderror
+    <div class="full">
+      <label for="nombre">Nombre del proveedor</label>
+      <input type="text" id="nombre" name="nombre" value="{{ old('nombre') }}" required>
+      @error('nombre') <div class="errors">{{ $message }}</div> @enderror
+    </div>
 
-    <label for="telefono">Teléfono:</label>
-    <input type="text" name="telefono" id="telefono" value="{{ old('telefono') }}">
+    <div>
+      <label for="telefono">Teléfono</label>
+      <input type="text" id="telefono" name="telefono" value="{{ old('telefono') }}">
+    </div>
 
-    <label for="correo">Correo electrónico:</label>
-    <input type="email" name="correo" id="correo" value="{{ old('correo') }}">
+    <div>
+      <label for="correo">Correo</label>
+      <input type="email" id="correo" name="correo" value="{{ old('correo') }}">
+    </div>
 
-    <label for="direccion">Dirección:</label>
-    <input type="text" name="direccion" id="direccion" value="{{ old('direccion') }}">
+    <div class="full">
+      <label for="direccion">Dirección</label>
+      <input type="text" id="direccion" name="direccion" value="{{ old('direccion') }}">
+    </div>
 
-    <label for="notas">Notas adicionales:</label>
-    <textarea name="notas" id="notas" rows="3">{{ old('notas') }}</textarea>
+    <div class="full">
+      <label for="notas">Notas adicionales</label>
+      <textarea id="notas" name="notas">{{ old('notas') }}</textarea>
+    </div>
 
-    <button type="submit">Guardar proveedor</button>
-    <br>
-    <a href="{{ route('proveedors.index') }}">← Volver al listado</a>
+    <div class="actions full">
+      <button type="submit" class="btn btn-primary"> Guardar proveedor</button>
+      <a class="btn btn-back" href="{{ route('proveedors.index') }}">Volver</a>
+    </div>
   </form>
-
-</body>
-</html>
+</div>
+@endsection

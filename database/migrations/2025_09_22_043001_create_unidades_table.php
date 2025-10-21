@@ -9,7 +9,7 @@ return new class extends Migration {
         if (!Schema::hasTable('unidades')) {
             Schema::create('unidades', function (Blueprint $table) {
                 $table->id();
-                $table->string('clave', 20)->unique();     // ej: costal, caja, pza
+                $table->string('clave', 20)->unique();    
                 $table->string('descripcion', 100);
                 $table->timestamps();
             });
