@@ -6,104 +6,273 @@ use App\Models\Producto;
 use App\Models\Categoria;
 use App\Models\Unidad;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Illuminate\Database\QueryException;
 
 class ProductoController extends Controller
 {
-    /** Muestra la lista de productos.*/
-    public function index()
+    public function index(Request $request)
     {
-        // Trae todos los productos junto con sus relaciones (unidad y categoría)
-        $productos = Producto::with(['unidad', 'categoria'])->get();
+        $q = $request->get('q');
 
-        // Retorna la vista 'productos.index' y le envía los productos
-        return view('productos.index', compact('productos'));
+        $productos = Producto::with(['unidad','categoria'])
+            ->when($q, function($query) use ($q){
+                $query->where(function($qq) use ($q){
+                    $qq->where('codigo','like',"%$q%")
+                       ->orWhere('nombre','like',"%$q%");
+                })
+                ->orWhereHas('categoria', function($qc) use ($q){
+                    $qc->where('nombre','like',"%$q%");
+                })
+                ->orWhereHas('unidad', function($qu) use ($q){
+                    $qu->where('descripcion','like',"%$q%");
+                });
+            })
+            ->orderByDesc('id')
+            ->get();
+
+        $categorias = Categoria::orderBy('nombre')->get();
+        $unidades   = Unidad::orderBy('descripcion')->get();
+
+        return view('productos.index', compact('productos','categorias','unidades','q'));
     }
 
-    /**
-     * Muestra el formulario para crear un nuevo producto.
-     */
-    public function create()
-    {
-        // Carga todas las categorías y unidades disponibles para el formulario
-        $categorias = Categoria::all();
-        $unidades = Unidad::all();
-
-        // Retorna la vista 'productos.create' con los datos
-        return view('productos.create', compact('categorias', 'unidades'));
-    }
-
-    /**
-     * Guarda un nuevo producto en la base de datos.
-     */
-    public function store(Request $request)
-    {
-        // Validar los datos del formulario
-        $request->validate([
-            'codigo' => 'required|unique:productos,codigo|max:64',
-            'nombre' => 'required|max:255',
-            'unidad_id' => 'required|exists:unidades,id',
-            'categoria_id' => 'nullable|exists:categorias,id',
-            'existencias' => 'required|integer|min:0',
-            'stock_minimo' => 'required|integer|min:0',
-            'costo_promedio' => 'nullable|numeric|min:0',
-        ]);
-
-        // Crea el nuevo producto con los datos validados
-        Producto::create($request->all());
-
-        // Redirige a la lista de productos con mensaje de éxito
-        return redirect()->route('productos.index')->with('success', 'Producto agregado correctamente.');
-    }
-
-    /**
-     * Muestra los detalles de un producto específico.
-     */
     public function show(Producto $producto)
     {
-        return view('productos.show', compact('producto'));
+        $producto->load(['categoria','unidad']);
+        $enAlerta = (int)$producto->existencias < (int)$producto->stock_minimo;
+
+        return response()->json([
+            'ok'        => true,
+            'producto'  => $producto,
+            'en_alerta' => $enAlerta,
+            'sugerencia_reposicion' => max(0, (int)$producto->stock_minimo - (int)$producto->existencias),
+        ]);
     }
 
-    /**
-     * Muestra el formulario para editar un producto existente.
-     */
     public function edit(Producto $producto)
     {
-        // Trae las categorías y unidades para el formulario
-        $categorias = Categoria::all();
-        $unidades = Unidad::all();
-
-        return view('productos.edit', compact('producto', 'categorias', 'unidades'));
+        $producto->load(['categoria','unidad']);
+        return response()->json(['ok'=>true,'producto'=>$producto]);
     }
 
-    /**
-     * Actualiza los datos de un producto.
-     */
-    public function update(Request $request, Producto $producto)
+    public function store(Request $request)
     {
-        // Validación de los datos
-        $request->validate([
-            'nombre' => 'required|max:255',
-            'unidad_id' => 'required|exists:unidades,id',
-            'categoria_id' => 'nullable|exists:categorias,id',
-            'existencias' => 'required|integer|min:0',
-            'stock_minimo' => 'required|integer|min:0',
-            'costo_promedio' => 'nullable|numeric|min:0',
+        $this->authorizeAdmin();
+
+        $request->merge([
+            'categoria_id' => $request->filled('categoria_id') ? (int)$request->categoria_id : null,
+            'unidad_id'    => $request->filled('unidad_id')    ? (int)$request->unidad_id    : null,
+            'existencias'  => (int) $request->existencias,
+            'stock_minimo' => (int) $request->stock_minimo,
         ]);
 
-        // Actualiza los datos del producto
-        $producto->update($request->all());
+        $data = $request->validate([
+            'codigo'               => ['required','string','max:64','unique:productos,codigo'],
+            'nombre'               => ['required','string','max:255'],
+            'unidad_id'            => ['required','integer','exists:unidades,id'],
+            'categoria_id'         => ['nullable','integer','exists:categorias,id'],
+            'existencias'          => ['required','integer','min:0'],
+            'stock_minimo'         => ['required','integer','min:0'],
+            'costo_promedio'       => ['nullable','numeric','min:0'],
+            'presentacion_detalle' => ['nullable','string','max:255'],
+        ]);
 
-        return redirect()->route('productos.index')->with('success', 'Producto actualizado correctamente.');
+        $payload = $this->filtrarCamposSegunTabla($data);
+
+        $producto = Producto::create($payload)->load(['categoria','unidad']);
+
+        $this->checkAndNotifyLowStock($producto);
+
+        return response()->json(['ok'=>true,'producto'=>$producto]);
     }
 
-    /**
-     * Elimina (soft delete) un producto del inventario.
-     */
+    public function update(Request $request, Producto $producto)
+    {
+        $this->authorizeAdmin();
+
+        $request->merge([
+            'categoria_id' => $request->filled('categoria_id') ? (int)$request->categoria_id : null,
+            'unidad_id'    => $request->filled('unidad_id')    ? (int)$request->unidad_id    : null,
+            'existencias'  => (int) $request->existencias,
+            'stock_minimo' => (int) $request->stock_minimo,
+        ]);
+
+        $data = $request->validate([
+            'codigo'               => ['required','string','max:64', Rule::unique('productos','codigo')->ignore($producto->id)],
+            'nombre'               => ['required','string','max:255'],
+            'unidad_id'            => ['required','integer','exists:unidades,id'],
+            'categoria_id'         => ['nullable','integer','exists:categorias,id'],
+            'existencias'          => ['required','integer','min:0'],
+            'stock_minimo'         => ['required','integer','min:0'],
+            'costo_promedio'       => ['nullable','numeric','min:0'],
+            'presentacion_detalle' => ['nullable','string','max:255'],
+        ]);
+
+        $payload = $this->filtrarCamposSegunTabla($data);
+
+        $producto->update($payload);
+        $producto->load(['categoria','unidad']);
+
+        $this->checkAndNotifyLowStock($producto);
+
+        return response()->json(['ok'=>true,'producto'=>$producto]);
+    }
+
     public function destroy(Producto $producto)
     {
+        $this->authorizeAdmin();
         $producto->delete();
-        return redirect()->route('productos.index')->with('success', 'Producto eliminado correctamente.');
+        return response()->json(['ok'=>true,'message'=>'Producto eliminado correctamente.']);
     }
 
-    
+    // --------- Inline categoría
+    public function storeCategoriaInline(Request $request)
+    {
+        $this->authorizeAdmin();
+
+        $data = $request->validate([
+            'nombre' => ['required','string','max:100','unique:categorias,nombre'],
+        ]);
+
+        $cat = Categoria::create($data);
+        return response()->json(['ok'=>true,'message'=>'Categoría creada.','categoria'=>$cat]);
+    }
+
+    // Eliminar categoría (con control FK)
+    public function destroyCategoriaInline(Categoria $categoria)
+    {
+        $this->authorizeAdmin();
+
+        try {
+            $categoria->delete();
+            return response()->json(['ok'=>true,'message'=>'Categoría eliminada.']);
+        } catch (QueryException $e) {
+            // 23000 = violación de restricción (FK en uso)
+            if ($e->getCode() === '23000') {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'No se puede eliminar: la categoría está en uso por uno o más productos.'
+                ], 409);
+            }
+            return response()->json(['ok'=>false,'message'=>'Error al eliminar categoría.'], 500);
+        }
+    }
+
+    // --------- Inline unidad
+    public function storeUnidadInline(Request $request)
+    {
+        $this->authorizeAdmin();
+
+        $data = $request->validate([
+            'descripcion' => ['required','string','max:100','unique:unidades,descripcion'],
+        ]);
+
+        // Generar clave única basada en la descripción (máx 20)
+        $base  = Str::slug($data['descripcion'], '_');
+        $clave = substr($base, 0, 20) ?: substr(Str::random(8), 0, 8);
+        $orig  = $clave; $i = 1;
+
+        while (Unidad::where('clave', $clave)->exists()) {
+            $suf   = '_'.$i++;
+            $clave = substr($orig, 0, max(1, 20 - strlen($suf))) . $suf;
+        }
+
+        $uni = Unidad::create([
+            'clave'       => $clave,
+            'descripcion' => $data['descripcion'],
+        ]);
+
+        return response()->json(['ok'=>true,'message'=>'Unidad creada.','unidad'=>$uni]);
+    }
+
+    // Eliminar unidad (bloquea si está en uso)
+    public function destroyUnidadInline(Unidad $unidad)
+    {
+        $this->authorizeAdmin();
+
+        $enUso = Producto::where('unidad_id', $unidad->id)->exists();
+        if ($enUso) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se puede eliminar: hay productos que usan esta unidad.'
+            ], 422);
+        }
+
+        $unidad->delete();
+        return response()->json(['ok'=>true,'message'=>'Unidad eliminada.']);
+    }
+
+    public function kardexJson(Producto $producto)
+    {
+        $movs = [];
+        return response()->json([
+            'ok'=>true,
+            'producto'=>$producto->only(['id','codigo','nombre']),
+            'movs'=>$movs
+        ]);
+    }
+
+    public function sugerenciaReposicion(Producto $producto)
+    {
+        $sugerida = max(0, (int)$producto->stock_minimo - (int)$producto->existencias);
+        return response()->json([
+            'ok'=>true,
+            'producto'=>$producto->only(['id','codigo','nombre']),
+            'sugerida'=>$sugerida,
+        ]);
+    }
+
+    protected function checkAndNotifyLowStock(Producto $producto): void
+    {
+        try {
+            $bajo = (int)$producto->existencias < (int)$producto->stock_minimo;
+            if (!$bajo) return;
+
+            $adminPhone = env('ADMIN_PHONE');
+            if (!$adminPhone) return;
+
+            $msg = sprintf(
+                "⚠️ Bajo stock: %s (%s). Existencias: %d | Mínimo: %d",
+                $producto->nombre, $producto->codigo,
+                (int)$producto->existencias, (int)$producto->stock_minimo
+            );
+
+            $waUrl   = env('NOTIF_WHATSAPP_URL');
+            $waToken = env('NOTIF_WHATSAPP_TOKEN');
+            if ($waUrl && $waToken) { Http::withToken($waToken)->post($waUrl, ['to'=>$adminPhone,'message'=>$msg]); return; }
+
+            $smsUrl   = env('NOTIF_SMS_URL');
+            $smsToken = env('NOTIF_SMS_TOKEN');
+            if ($smsUrl && $smsToken) { Http::withToken($smsToken)->post($smsUrl, ['to'=>$adminPhone,'message'=>$msg]); return; }
+
+            Log::info('[LOW_STOCK] '.$msg);
+        } catch (\Throwable $e) {
+            Log::error('Error enviando notificación de bajo stock: '.$e->getMessage());
+        }
+    }
+
+    protected function authorizeAdmin()
+    {
+        $u = Auth::user();
+        if (!$u) abort(401, 'Debes iniciar sesión.');
+
+        if (isset($u->is_admin) && (bool)$u->is_admin === true) return;
+        $role = strtolower((string)($u->role ?? $u->rol ?? ''));
+        if (in_array($role, ['admin','administrador','administradora','superadmin','super administrador','adm'], true)) return;
+        if (app()->bound('gate') && app('gate')->allows('manage-products')) return;
+
+        abort(403, 'No autorizado (solo administradores).');
+    }
+
+    private function filtrarCamposSegunTabla(array $data): array
+    {
+        $cols = Schema::getColumnListing('productos');
+        return array_intersect_key($data, array_flip($cols));
+    }
 }

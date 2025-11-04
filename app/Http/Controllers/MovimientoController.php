@@ -29,6 +29,8 @@ class MovimientoController extends Controller
             ->orderByDesc('created_at')
             ->paginate(20) // 👈 importante para filtros + rendimiento
             ->appends($request->query());
+            $productos  = \App\Models\Producto::orderBy('nombre')->get();
+            $proveedors = \App\Models\Proveedor::orderBy('nombre')->get();
 
         return view('movimientos.index', compact('movimientos'));
     }

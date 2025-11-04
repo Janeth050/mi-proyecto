@@ -15,13 +15,13 @@ class Producto extends Model
     protected $fillable = [
         'codigo','nombre','unidad_id','categoria_id',
         'existencias','stock_minimo','costo_promedio',
-        'presentacion_detalle','descripcion',
+        'presentacion_detalle',
     ];
 
     protected $casts = [
-        'existencias'      => 'integer',
-        'stock_minimo'     => 'integer',
-        'costo_promedio'   => 'decimal:4',
+        'existencias'    => 'integer',
+        'stock_minimo'   => 'integer',
+        'costo_promedio' => 'decimal:4',
     ];
 
     // Relaciones
@@ -44,7 +44,6 @@ class Producto extends Model
 
     public function getEtiquetaAttribute(): string
     {
-        // p.ej: "Harina Costal 50 kg (costal) — x3"
         $u = $this->unidad?->clave;
         $det = $this->presentacion_detalle ? " {$this->presentacion_detalle}" : '';
         return "{$this->nombre}{$det}" . ($u ? " ({$u})" : '');

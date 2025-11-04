@@ -14,19 +14,15 @@ class User extends Authenticatable
 
     protected $fillable = ['name','email','password','role'];
 
-    protected $hidden = ['password','remember_token'];
+    protected $hidden = ['password','remember_token']; 
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        // Si usas Laravel 10+, puedes activar hash automático:
+        // 'password' => 'hashed',
     ];
 
-    // Helpers de rol
-    public function isAdmin(): bool   { return $this->role === 'admin'; }
-    public function isEmpleado(): bool{ return $this->role === 'empleado'; }
-
-    // Si tienes la relación con movimientos
-    public function movimientos()
-    {
-        return $this->hasMany(Movimiento::class, 'user_id');
-    }
+    public function isAdmin(): bool    { return ($this->role === 'admin') || (bool)($this->is_admin ?? false); }
+    public function isEmpleado(): bool { return $this->role === 'empleado'; }
 }
+

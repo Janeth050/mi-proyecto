@@ -11,8 +11,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // aquí si luego agregas middleware global
     })
+    ->withProviders([
+        App\Providers\AppServiceProvider::class,
+        App\Providers\AuthServiceProvider::class, 
+    ])
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->create();

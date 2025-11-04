@@ -23,7 +23,6 @@
       color:var(--texto);
     }
 
-    /* ============ HEADER ============ */
     header{
       background:#fff;
       border-bottom:1px solid var(--borde);
@@ -56,8 +55,6 @@
       border-radius:50%;
       display:block;
     }
-
-    /* Links de navegación (escritorio) */
     nav{
       display:flex;
       align-items:center;
@@ -75,8 +72,6 @@
       background:var(--cafe);
       color:#fff;
     }
-
-    /* Usuario + salir */
     .user-info{
       display:flex;
       align-items:center;
@@ -94,8 +89,6 @@
       font-weight:600;
     }
     .logout-btn:hover{background:var(--rojo-hover)}
-
-    /* ============ MENÚ RESPONSIVO ============ */
     .hamb{
       display:none;
       justify-content:center;
@@ -108,12 +101,7 @@
       cursor:pointer;
       padding:0;
     }
-    .hamb img{
-      width:24px;
-      height:24px;
-      display:block;
-    }
-
+    .hamb img{width:24px;height:24px;display:block;}
     .mobile-menu{
       display:none;
       flex-direction:column;
@@ -127,43 +115,48 @@
       text-decoration:none;
       border-radius:0;
     }
-    .mobile-menu a:hover{
-      background:#f2e8db;
-    }
-
-    /* ============ CONTENIDO ============ */
+    .mobile-menu a:hover{background:#f2e8db;}
     main{
       max-width:1200px;
       margin:0 auto;
       padding:24px 20px;
     }
-
-    /* ============ RESPONSIVE ============ */
     @media (max-width: 920px){
       nav{display:none;}
       .hamb{display:flex;}
       .mobile-menu.show{display:flex;}
-      .user-info span{display:none;} /* oculta nombre/rol para dar espacio */
+      .user-info span{display:none;}
     }
   </style>
 </head>
 <body>
   <header>
     <div class="navbar">
-      {{-- LOGO + NOMBRE --}}
+      {{-- LOGO --}}
       <a href="{{ route('dashboard') }}" class="brand">
         <img src="{{ asset('images/logo.png') }}" alt="Logo">
         <span>Inventario Panadería</span>
       </a>
 
-      {{-- LINKS PRINCIPALES (escritorio) --}}
+      {{-- MENÚ DE ESCRITORIO --}}
       <nav>
         <a href="{{ route('dashboard') }}"      class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
         <a href="{{ route('productos.index') }}" class="{{ request()->is('productos*')   ? 'active' : '' }}">Productos</a>
-        <a href="{{ route('proveedors.index') }}" class="{{ request()->is('proveedors*')  ? 'active' : '' }}">Proveedores</a>
+
+        {{-- Proveedores solo visible para administradores --}}
+        @if(auth()->user() && auth()->user()->role === 'admin')
+          <a href="{{ route('proveedors.index') }}" class="{{ request()->is('proveedors*')  ? 'active' : '' }}">Proveedores</a>
+        @endif
+
         <a href="{{ route('movimientos.index') }}" class="{{ request()->is('movimientos*') ? 'active' : '' }}">Movimientos</a>
         <a href="{{ route('kardex.index') }}"     class="{{ request()->is('kardex*')      ? 'active' : '' }}">Kardex</a>
-        <a href="{{ route('listas.index') }}"     class="{{ request()->is('listas*')      ? 'active' : '' }}">Listas</a>
+
+        {{-- Listas solo para administradores --}}
+        @if(auth()->user() && auth()->user()->role === 'admin')
+          <a href="{{ route('listas.index') }}"     class="{{ request()->is('listas*')      ? 'active' : '' }}">Listas</a>
+        @endif
+
+        {{-- Usuarios solo admin --}}
         @if(auth()->user() && auth()->user()->role === 'admin')
           <a href="{{ route('usuarios.index') }}" class="{{ request()->is('usuarios*')    ? 'active' : '' }}">Usuarios</a>
         @endif
@@ -176,8 +169,6 @@
           @csrf
           <button type="submit" class="logout-btn">Salir</button>
         </form>
-
-        {{-- Ícono hamburguesa personalizado --}}
         <button class="hamb" id="hamb" aria-label="Abrir menú">
           <img src="{{ asset('images/icono1.png') }}" alt="Menú">
         </button>
@@ -188,13 +179,24 @@
     <div class="mobile-menu" id="mobileMenu">
       <a href="{{ route('dashboard') }}"      class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
       <a href="{{ route('productos.index') }}" class="{{ request()->is('productos*')   ? 'active' : '' }}">Productos</a>
-      <a href="{{ route('proveedors.index') }}" class="{{ request()->is('proveedors*')  ? 'active' : '' }}">Proveedores</a>
+
+      {{-- Proveedores solo visible para administradores --}}
+      @if(auth()->user() && auth()->user()->role === 'admin')
+        <a href="{{ route('proveedors.index') }}" class="{{ request()->is('proveedors*')  ? 'active' : '' }}">Proveedores</a>
+      @endif
+
       <a href="{{ route('movimientos.index') }}" class="{{ request()->is('movimientos*') ? 'active' : '' }}">Movimientos</a>
       <a href="{{ route('kardex.index') }}"     class="{{ request()->is('kardex*')      ? 'active' : '' }}">Kardex</a>
-      <a href="{{ route('listas.index') }}"     class="{{ request()->is('listas*')      ? 'active' : '' }}">Listas</a>
+
+      {{-- Listas solo para administradores --}}
+      @if(auth()->user() && auth()->user()->role === 'admin')
+        <a href="{{ route('listas.index') }}"     class="{{ request()->is('listas*')      ? 'active' : '' }}">Listas</a>
+      @endif
+
       @if(auth()->user() && auth()->user()->role === 'admin')
         <a href="{{ route('usuarios.index') }}" class="{{ request()->is('usuarios*')    ? 'active' : '' }}">Usuarios</a>
       @endif
+
       <form method="POST" action="{{ route('logout') }}" style="padding:8px 16px;">
         @csrf
         <button type="submit" class="logout-btn" style="width:100%">Cerrar sesión</button>
@@ -206,7 +208,6 @@
     @yield('content')
   </main>
 
-  {{-- Toggle del menú móvil --}}
   <script>
     const hamb = document.getElementById('hamb');
     const menu = document.getElementById('mobileMenu');
@@ -214,8 +215,6 @@
       menu.classList.toggle('show');
       hamb.setAttribute('aria-label', menu.classList.contains('show') ? 'Cerrar menú' : 'Abrir menú');
     });
-
-    // Cierra el menú al navegar (mejor UX)
     menu?.querySelectorAll('a, button').forEach(el => {
       el.addEventListener('click', () => menu.classList.remove('show'));
     });
