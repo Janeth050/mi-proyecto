@@ -2,7 +2,6 @@
 
 use Illuminate\Support\Facades\Route;
 
-// Importa tus controladores
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProveedorController;
@@ -12,91 +11,75 @@ use App\Http\Controllers\ListaPedidoController;
 use App\Http\Controllers\ListaPedidoItemController;
 use App\Http\Controllers\UsuarioController;
 
-/*
-|--------------------------------------------------------------------------
-| Rutas públicas / inicio
-|--------------------------------------------------------------------------
-|
-| Si usas Breeze/Jetstream, los endpoints de auth (login, register, etc.)
-| vienen en routes/auth.php. Abajo los incluimos.
-|
-*/
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Auth;
 
-// Página raíz → manda al login (si no está logueado)
+Route::get('/__diag-gate', function () {
+    $u = Auth::user();
+    return [
+        'user' => $u ? ['id' => $u->id, 'name' => $u->name, 'email' => $u->email, 'role' => $u->role] : null,
+        'can_manage_lists' => Gate::forUser($u)->allows('manage-lists'),
+    ];
+})->middleware('auth');
+
 Route::redirect('/', '/login')->name('home');
-
-// Rutas de autenticación (Breeze/Jetstream)
 require __DIR__ . '/auth.php';
 
-/*
-|--------------------------------------------------------------------------
-| Rutas protegidas por login
-|--------------------------------------------------------------------------
-|
-| Todo lo que está dentro de este grupo requiere sesión iniciada.
-|
-*/
 Route::middleware(['auth'])->group(function () {
-
-    // Dashboard: decide admin o empleado según el rol del usuario
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    /*
-    |----------------------------------------------------------------------
-    | Productos (CRUD)
-    |----------------------------------------------------------------------*/
+    // ===== Productos =====
+    Route::get('/productos/{producto}/kardex-json', [ProductoController::class, 'kardexJson'])->name('productos.kardex.json');
     Route::resource('productos', ProductoController::class);
 
-    /*
-    |----------------------------------------------------------------------
-    | Proveedores (CRUD)
-    |----------------------------------------------------------------------
-    */
-    Route::resource('proveedors', ProveedorController::class);
+    // Inline categoría/unidad (en ProductoController)
+    Route::post('/productos/categorias/inline', [ProductoController::class, 'storeCategoriaInline'])->name('productos.categorias.inline');
+    Route::delete('/productos/categorias/{categoria}', [ProductoController::class, 'destroyCategoriaInline'])->name('productos.categorias.destroy');
 
-    /*
-    |----------------------------------------------------------------------
-    | Movimientos de inventario (Entradas/Salidas)
-    |----------------------------------------------------------------------
-    */
+    Route::post('/productos/unidades/inline',  [ProductoController::class, 'storeUnidadInline'])->name('productos.unidades.inline');
+    Route::delete('/productos/unidades/{unidad}', [ProductoController::class, 'destroyUnidadInline'])->name('productos.unidades.destroy');
+
+    Route::get('/productos/{producto}/sugerencia', [ProductoController::class, 'sugerenciaReposicion'])->name('productos.sugerencia');
+
+    // ===== Proveedores
+    Route::resource('proveedors', ProveedorController::class)->middleware('can:manage-suppliers');
+
+    // ===== Movimientos
     Route::resource('movimientos', MovimientoController::class)->only(['index','create','store','show']);
-    // Cancelar (POST por seguridad CSRF)
-    Route::post('movimientos/{movimiento}/cancelar', [MovimientoController::class, 'cancelar'])->name('movimientos.cancelar');
-    /*
-    |----------------------------------------------------------------------
-    | Kardex (histórico por producto y global con filtros)
-    |----------------------------------------------------------------------
-    */
+    Route::post('movimientos/{movimiento}/cancelar', [MovimientoController::class, 'cancelar'])->middleware('can:manage-movements')->name('movimientos.cancelar');
+    Route::delete('movimientos/{movimiento}', [MovimientoController::class, 'destroy'])->middleware('can:manage-movements')->name('movimientos.destroy');
+
+    // ===== Kardex
     Route::get('/kardex', [KardexController::class, 'index'])->name('kardex.index');
     Route::get('/kardex/producto/{producto}', [KardexController::class, 'showProducto'])->name('kardex.producto');
 
-    /*
-    |----------------------------------------------------------------------
-    | Listas de pedido (no crean movimientos)
-    |----------------------------------------------------------------------
-    | Solo creamos/mostramos/eliminamos listas, y gestionamos sus ítems.
-    */
-    Route::resource('listas', ListaPedidoController::class)->only(['index','create','store','show','destroy']);
-    Route::post('listas/{lista}/enviar',   [ListaPedidoController::class, 'enviar'])  ->name('listas.enviar');
-    Route::post('listas/{lista}/cerrar',   [ListaPedidoController::class, 'cerrar'])  ->name('listas.cerrar');
-    Route::post('listas/{lista}/cancelar', [ListaPedidoController::class, 'cancelar'])->name('listas.cancelar');
+    // ===== Listas (solo admin por Gate)
+    Route::middleware('can:manage-lists')->group(function () {
+        Route::get('listas',                [ListaPedidoController::class, 'index'])->name('listas.index');
+        Route::get('listas/create',         [ListaPedidoController::class, 'create'])->name('listas.create');
+        Route::post('listas',               [ListaPedidoController::class, 'store'])->name('listas.store');
+        Route::get('listas/{lista}',        [ListaPedidoController::class, 'show'])->name('listas.show');
+        Route::delete('listas/{lista}',     [ListaPedidoController::class, 'destroy'])->name('listas.destroy');
 
-    // Ítems dentro de una lista
-    Route::post  ('listas/{lista}/items',               [ListaPedidoItemController::class, 'store' ]) ->name('listas.items.store');
-    Route::put   ('listas/{lista}/items/{item}',        [ListaPedidoItemController::class, 'update']) ->name('listas.items.update');
-    Route::delete('listas/{lista}/items/{item}',        [ListaPedidoItemController::class, 'destroy'])->name('listas.items.destroy');
+        Route::post('listas/{lista}/enviar',   [ListaPedidoController::class, 'enviar'])->name('listas.enviar');
+        Route::post('listas/{lista}/cerrar',   [ListaPedidoController::class, 'cerrar'])->name('listas.cerrar');
+        Route::post('listas/{lista}/cancelar', [ListaPedidoController::class, 'cancelar'])->name('listas.cancelar');
 
-     // Usuarios (solo admin) - el propio controlador ya bloquea con adminOnly()
+        // Quick add desde Productos
+        Route::post('/listas/quick-add/{producto}', [ListaPedidoController::class, 'quickAddFromProducto'])
+            ->name('listas.quickadd');
+        
+        // Ítems de la lista
+        Route::post('listas/{lista}/items',           [ListaPedidoItemController::class, 'store'])->name('listas.items.store');
+        Route::put('listas/{lista}/items/{item}',     [ListaPedidoItemController::class, 'update'])->name('listas.items.update');
+        Route::delete('listas/{lista}/items/{item}',  [ListaPedidoItemController::class, 'destroy'])->name('listas.items.destroy');
+    });
+
+    // ===== Usuarios (solo admin)
     Route::resource('usuarios', UsuarioController::class)
         ->parameters(['usuarios' => 'usuario'])
-        ->except(['show']);
+        ->except(['show'])
+        ->middleware('can:manage-users');
 });
 
-/*
-|--------------------------------------------------------------------------
-| Fallback (404 amable)
-|--------------------------------------------------------------------------
-*/
-Route::fallback(function () {
-    return response()->view('errors.404', [], 404);
-});
+Route::fallback(function () { abort(404); });
