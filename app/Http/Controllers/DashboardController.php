@@ -19,20 +19,30 @@ class DashboardController extends Controller
 
     public function admin()
     {
-        // Existencias bajas
-        $bajo = Producto::whereColumn('existencias','<','stock_minimo')
-            ->with('unidad')->orderBy('nombre')->take(8)->get();
+        // === Existencias bajas (<=) ===
+        $bajo = Producto::whereColumn('existencias', '<=', 'stock_minimo')
+            ->with('unidad')
+            ->orderBy('nombre')
+            ->take(8)
+            ->get();
 
-        // Últimos movimientos (trae 'producto' si existe la relación)
+        // === Últimos 5 movimientos ===
         $ultimos = Movimiento::with(['producto.unidad','usuario'])
-            ->orderByDesc('created_at')->take(10)->get();
+            ->orderByDesc('created_at')
+            ->take(5)
+            ->get();
 
-        // KPIs
+        // === KPIs "hoy" respetando timezone de la app ===
+        $hoyInicio = Carbon::now(config('app.timezone'))->startOfDay()->timezone('UTC');
+        $hoyFin    = Carbon::now(config('app.timezone'))->endOfDay()->timezone('UTC');
+
         $resumen = [
             'productos_total' => Producto::count(),
-            'bajo_stock'      => Producto::whereColumn('existencias','<','stock_minimo')->count(),
-            'entradas_hoy'    => Movimiento::where('tipo','entrada')->whereDate('created_at', now())->count(),
-            'salidas_hoy'     => Movimiento::where('tipo','salida' )->whereDate('created_at', now())->count(),
+            'bajo_stock'      => Producto::whereColumn('existencias','<=','stock_minimo')->count(),
+            'entradas_hoy'    => Movimiento::where('tipo','entrada')
+                                  ->whereBetween('created_at', [$hoyInicio, $hoyFin])->count(),
+            'salidas_hoy'     => Movimiento::where('tipo','salida')
+                                  ->whereBetween('created_at', [$hoyInicio, $hoyFin])->count(),
         ];
 
         // ===== TOP usados 30 días (salidas) =====
@@ -42,14 +52,15 @@ class DashboardController extends Controller
         $topData   = collect();
 
         if ($col) {
-            $desde = Carbon::now()->subDays(30)->startOfDay();
+            $desdeLocal = Carbon::now(config('app.timezone'))->subDays(30)->startOfDay();
+            $desdeUTC   = $desdeLocal->clone()->timezone('UTC');
 
             $top = Movimiento::where('tipo','salida')
-                ->where('created_at','>=', $desde)
+                ->where('created_at','>=', $desdeUTC)
                 ->select($col.' as pid', DB::raw('SUM(cantidad) as total'))
                 ->groupBy('pid')->orderByDesc('total')->limit(7)->get();
 
-            $map = Producto::with('unidad')
+            $map = \App\Models\Producto::with('unidad')
                 ->whereIn('id', $top->pluck('pid'))->get()->keyBy('id');
 
             $topLabels = $top->map(function ($row) use ($map) {
@@ -63,12 +74,15 @@ class DashboardController extends Controller
         }
 
         // ===== Gasto mensual (entradas) últimos 6 meses =====
+        $hace6Local = Carbon::now(config('app.timezone'))->subMonths(6)->startOfMonth();
+        $hace6UTC   = $hace6Local->clone()->timezone('UTC');
+
         $gastoRows = Movimiento::select(
-                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as ym"),
+                DB::raw("DATE_FORMAT(CONVERT_TZ(created_at,'+00:00','+00:00'), '%Y-%m') as ym"),
                 DB::raw('SUM(COALESCE(costo_total,0)) as total')
             )
             ->where('tipo','entrada')
-            ->where('created_at','>=', Carbon::now()->subMonths(6)->startOfMonth())
+            ->where('created_at','>=', $hace6UTC)
             ->groupBy('ym')->orderBy('ym')->get();
 
         $gastoLabels = $gastoRows->pluck('ym');
@@ -83,7 +97,9 @@ class DashboardController extends Controller
 
         $ultimos = Movimiento::with(['producto.unidad','usuario'])
             ->where('user_id', $u->id)
-            ->orderByDesc('created_at')->take(10)->get();
+            ->orderByDesc('created_at')
+            ->take(5)
+            ->get();
 
         return view('dashboard.empleado', compact('ultimos'));
     }

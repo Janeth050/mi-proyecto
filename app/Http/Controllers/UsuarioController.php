@@ -14,7 +14,6 @@ class UsuarioController extends Controller
     {
         $this->middleware('auth');
 
-        // 🔒 Admin obligatorio para todo el controlador (cierre rápido)
         $this->middleware(function ($request, $next) {
             $u = $request->user();
             if (!$u) abort(401, 'Debes iniciar sesión.');
@@ -24,7 +23,6 @@ class UsuarioController extends Controller
         });
     }
 
-    // 🔐 Método usado en las acciones (faltaba y daba error)
     protected function authorizeAdmin(): void
     {
         $u = Auth::user();

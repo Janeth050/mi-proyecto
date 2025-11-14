@@ -9,12 +9,9 @@ class ListaPedidoItem extends Model
 {
     use HasFactory;
 
-    protected $table = 'lista_pedido_items'; // importante
+    protected $table = 'lista_pedido_items';
 
-    protected $fillable = [
-        'lista_pedido_id','producto_id','cantidad',
-        'proveedor_id','precio_estimado',
-    ];
+    protected $fillable = ['lista_pedido_id','producto_id','cantidad','proveedor_id','precio_estimado'];
 
     protected $casts = [
         'cantidad'        => 'integer',

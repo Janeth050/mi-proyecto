@@ -12,17 +12,31 @@ class User extends Authenticatable
 
     protected $table = 'users';
 
-    protected $fillable = ['name','email','password','role'];
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role',
+        'whatsapp_phone',     // ← nuevo
+        'notify_low_stock',   // ← nuevo
+    ];
 
-    protected $hidden = ['password','remember_token']; 
+    protected $hidden = ['password','remember_token'];
 
     protected $casts = [
         'email_verified_at' => 'datetime',
-        // Si usas Laravel 10+, puedes activar hash automático:
-        // 'password' => 'hashed',
+        'notify_low_stock'  => 'boolean', // ← importante para el switch
+        // 'password' => 'hashed', // (opcional en Laravel 10+)
     ];
 
-    public function isAdmin(): bool    { return ($this->role === 'admin') || (bool)($this->is_admin ?? false); }
-    public function isEmpleado(): bool { return $this->role === 'empleado'; }
+    public function isAdmin(): bool
+    {
+        return ($this->role === 'admin') || (bool)($this->is_admin ?? false);
+    }
+
+    public function isEmpleado(): bool
+    {
+        return $this->role === 'empleado';
+    }
 }
 

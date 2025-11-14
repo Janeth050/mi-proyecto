@@ -14,6 +14,7 @@
   .chip{display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid var(--borde);font-weight:600}
   .chip.entrada{border-color:var(--ok);color:var(--ok)}
   .chip.salida{border-color:var(--bad);color:var(--bad)}
+  .table-wrap{width:100%;overflow-x:auto}
   @media (max-width: 760px){
     .table thead{display:none}
     .table tr{display:block;border:1px solid var(--borde);margin-bottom:8px;border-radius:10px;overflow:hidden}
@@ -23,24 +24,28 @@
   }
 </style>
 
+@php $tz = config('app.timezone', 'America/Monterrey'); @endphp
+
 <h1 class="page">Mi actividad</h1>
 
 <div class="card">
   <h3 style="margin:0 0 10px;color:#5c3a21">Mis últimos movimientos</h3>
-  <table class="table">
-    <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cantidad</th></tr></thead>
-    <tbody>
-      @forelse($ultimos as $m)
-        <tr>
-          <td data-label="Fecha">{{ $m->created_at->format('d/m/Y H:i') }}</td>
-          <td data-label="Tipo"><span class="chip {{ $m->tipo }}">{{ ucfirst($m->tipo) }}</span></td>
-          <td data-label="Producto">{{ $m->producto->nombre ?? '-' }}</td>
-          <td data-label="Cantidad">{{ $m->cantidad }}</td>
-        </tr>
-      @empty
-        <tr><td colspan="4" style="text-align:center">Aún no registras movimientos.</td></tr>
-      @endforelse
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cantidad</th></tr></thead>
+      <tbody>
+        @forelse($ultimos as $m)
+          <tr>
+            <td data-label="Fecha">{{ $m->created_at->timezone($tz)->format('d/m/Y H:i') }}</td>
+            <td data-label="Tipo"><span class="chip {{ $m->tipo }}">{{ ucfirst($m->tipo) }}</span></td>
+            <td data-label="Producto">{{ $m->producto->nombre ?? '-' }}</td>
+            <td data-label="Cantidad">{{ $m->cantidad }}</td>
+          </tr>
+        @empty
+          <tr><td colspan="4" style="text-align:center">Aún no registras movimientos.</td></tr>
+        @endforelse
+      </tbody>
+    </table>
+  </div>
 </div>
 @endsection

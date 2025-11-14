@@ -34,12 +34,12 @@ class Producto extends Model
     // Scopes / helpers
     public function scopeBajoStock($q)
     {
-        return $q->whereColumn('existencias','<','stock_minimo');
+        return $q->whereColumn('existencias','<=','stock_minimo');
     }
 
     public function getEnAlertaAttribute(): bool
     {
-        return (int)$this->existencias < (int)$this->stock_minimo;
+        return (int)$this->existencias <= (int)$this->stock_minimo;
     }
 
     public function getEtiquetaAttribute(): string

@@ -5,20 +5,22 @@ namespace App\Http\Controllers;
 use App\Models\Producto;
 use App\Models\Categoria;
 use App\Models\Unidad;
+use App\Models\ListaPedido;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
 
 class ProductoController extends Controller
 {
     public function index(Request $request)
     {
-        $q = $request->get('q');
+        $q   = $request->get('q');
+        $low = $request->boolean('low');
 
         $productos = Producto::with(['unidad','categoria'])
             ->when($q, function($query) use ($q){
@@ -33,19 +35,32 @@ class ProductoController extends Controller
                     $qu->where('descripcion','like',"%$q%");
                 });
             })
+            ->when($low, fn($qq)=> $qq->bajoStock())
             ->orderByDesc('id')
             ->get();
+
+        // IDs ya en la lista en borrador del usuario, para ocultar el botón "Agregar a lista"
+        $idsEnLista = [];
+        if (Auth::check()) {
+            $listaBorrador = ListaPedido::where('user_id', Auth::id())
+                ->where('status', 'borrador')
+                ->first();
+            if ($listaBorrador) {
+                $idsEnLista = $listaBorrador->items()->pluck('producto_id')->all();
+            }
+        }
 
         $categorias = Categoria::orderBy('nombre')->get();
         $unidades   = Unidad::orderBy('descripcion')->get();
 
-        return view('productos.index', compact('productos','categorias','unidades','q'));
+        return view('productos.index', compact('productos','categorias','unidades','q','low','idsEnLista'));
     }
 
     public function show(Producto $producto)
     {
         $producto->load(['categoria','unidad']);
-        $enAlerta = (int)$producto->existencias < (int)$producto->stock_minimo;
+        // <= para que 5 de 5 sea alerta
+        $enAlerta = (int)$producto->existencias <= (int)$producto->stock_minimo;
 
         return response()->json([
             'ok'        => true,
@@ -140,12 +155,11 @@ class ProductoController extends Controller
             'nombre' => ['required','string','max:100','unique:categorias,nombre'],
         ]);
 
-        $cat = Categoria::create($data);
+        $cat = \App\Models\Categoria::create($data);
         return response()->json(['ok'=>true,'message'=>'Categoría creada.','categoria'=>$cat]);
     }
 
-    // Eliminar categoría (con control FK)
-    public function destroyCategoriaInline(Categoria $categoria)
+    public function destroyCategoriaInline(\App\Models\Categoria $categoria)
     {
         $this->authorizeAdmin();
 
@@ -153,7 +167,6 @@ class ProductoController extends Controller
             $categoria->delete();
             return response()->json(['ok'=>true,'message'=>'Categoría eliminada.']);
         } catch (QueryException $e) {
-            // 23000 = violación de restricción (FK en uso)
             if ($e->getCode() === '23000') {
                 return response()->json([
                     'ok' => false,
@@ -173,17 +186,16 @@ class ProductoController extends Controller
             'descripcion' => ['required','string','max:100','unique:unidades,descripcion'],
         ]);
 
-        // Generar clave única basada en la descripción (máx 20)
         $base  = Str::slug($data['descripcion'], '_');
         $clave = substr($base, 0, 20) ?: substr(Str::random(8), 0, 8);
         $orig  = $clave; $i = 1;
 
-        while (Unidad::where('clave', $clave)->exists()) {
+        while (\App\Models\Unidad::where('clave', $clave)->exists()) {
             $suf   = '_'.$i++;
             $clave = substr($orig, 0, max(1, 20 - strlen($suf))) . $suf;
         }
 
-        $uni = Unidad::create([
+        $uni = \App\Models\Unidad::create([
             'clave'       => $clave,
             'descripcion' => $data['descripcion'],
         ]);
@@ -191,8 +203,7 @@ class ProductoController extends Controller
         return response()->json(['ok'=>true,'message'=>'Unidad creada.','unidad'=>$uni]);
     }
 
-    // Eliminar unidad (bloquea si está en uso)
-    public function destroyUnidadInline(Unidad $unidad)
+    public function destroyUnidadInline(\App\Models\Unidad $unidad)
     {
         $this->authorizeAdmin();
 
@@ -210,6 +221,7 @@ class ProductoController extends Controller
 
     public function kardexJson(Producto $producto)
     {
+        // Mantengo stub si aún no lo ocupas.
         $movs = [];
         return response()->json([
             'ok'=>true,
@@ -228,32 +240,87 @@ class ProductoController extends Controller
         ]);
     }
 
+    // ====== NOTIFICACIONES ======
     protected function checkAndNotifyLowStock(Producto $producto): void
     {
         try {
-            $bajo = (int)$producto->existencias < (int)$producto->stock_minimo;
+            // <= para considerar el umbral exacto
+            $bajo = (int)$producto->existencias <= (int)$producto->stock_minimo;
             if (!$bajo) return;
 
-            $adminPhone = env('ADMIN_PHONE');
-            if (!$adminPhone) return;
+            // Admins con alertas activas y número guardado
+            $admins = \App\Models\User::query()
+                ->where(function ($q) {
+                    $q->where('role', 'admin')->orWhere('is_admin', true);
+                })
+                ->where('notify_low_stock', true)
+                ->whereNotNull('whatsapp_phone')
+                ->pluck('whatsapp_phone')
+                ->unique()
+                ->values()
+                ->all();
+
+            if (empty($admins)) {
+                Log::info('[LOW_STOCK] No hay administradores con número configurado.');
+                return;
+            }
 
             $msg = sprintf(
-                "⚠️ Bajo stock: %s (%s). Existencias: %d | Mínimo: %d",
-                $producto->nombre, $producto->codigo,
-                (int)$producto->existencias, (int)$producto->stock_minimo
+                "⚠️ *Alerta de bajo stock* ⚠️\n\nProducto: %s (%s)\nExistencias: %d\nStock mínimo: %d\n\n📦 Reponer pronto.",
+                $producto->nombre,
+                $producto->codigo,
+                (int)$producto->existencias,
+                (int)$producto->stock_minimo
             );
 
-            $waUrl   = env('NOTIF_WHATSAPP_URL');
-            $waToken = env('NOTIF_WHATSAPP_TOKEN');
-            if ($waUrl && $waToken) { Http::withToken($waToken)->post($waUrl, ['to'=>$adminPhone,'message'=>$msg]); return; }
+            $ok = $this->sendCallMeBot($admins, $msg);
 
-            $smsUrl   = env('NOTIF_SMS_URL');
-            $smsToken = env('NOTIF_SMS_TOKEN');
-            if ($smsUrl && $smsToken) { Http::withToken($smsToken)->post($smsUrl, ['to'=>$adminPhone,'message'=>$msg]); return; }
+            if ($ok) {
+                Log::info('[LOW_STOCK] Enviado correctamente a: ' . implode(', ', $admins));
+            } else {
+                Log::warning('[LOW_STOCK] No se pudo enviar el mensaje de WhatsApp.');
+            }
 
-            Log::info('[LOW_STOCK] '.$msg);
         } catch (\Throwable $e) {
-            Log::error('Error enviando notificación de bajo stock: '.$e->getMessage());
+            Log::error('Error al enviar notificación WhatsApp: ' . $e->getMessage());
+        }
+    }
+
+    private function sendCallMeBot(array $phones, string $message): bool
+    {
+        $apiKey  = env('CALLMEBOT_APIKEY');
+        $enabled = filter_var(env('CALLMEBOT_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+
+        if (!$enabled || !$apiKey) {
+            Log::info('[CallMeBot] Desactivado o sin API key.');
+            return false;
+        }
+
+        try {
+            foreach ($phones as $phone) {
+                $query = http_build_query([
+                    'phone'  => $phone,   // 52XXXXXXXXXX
+                    'text'   => $message,
+                    'apikey' => $apiKey,
+                ]);
+
+                $url = "https://api.callmebot.com/whatsapp.php?" . $query;
+
+                $resp = Http::withOptions([
+                    'verify'  => false,   // si tu hosting da problema SSL, esto lo evita
+                    'timeout' => 20,
+                ])->get($url);
+
+                if (!$resp->ok()) {
+                    Log::error('[CallMeBot] Error HTTP ' . $resp->status() . ': ' . $resp->body());
+                    return false;
+                }
+            }
+            return true;
+
+        } catch (\Throwable $e) {
+            Log::error('[CallMeBot] Excepción: ' . $e->getMessage());
+            return false;
         }
     }
 

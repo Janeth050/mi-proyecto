@@ -11,10 +11,11 @@ class ProveedorController extends Controller
 {
     public function __construct()
     {
-        // Debe estar logueado
+        // Autenticación
         $this->middleware('auth');
 
-        // Y además DEBE ser admin (lo verificamos aquí, para TODO el controlador)
+        // Doble cinturón: además del middleware can:manage-suppliers en rutas,
+        // aquí validamos admin de forma tolerante (coincide con Productos).
         $this->middleware(function ($request, $next) {
             $this->authorizeAdmin();
             return $next($request);
@@ -27,17 +28,15 @@ class ProveedorController extends Controller
         $u = Auth::user();
         if (!$u) abort(401, 'Debes iniciar sesión.');
 
-        // 1) is_admin=true si existiera
         if (isset($u->is_admin) && (bool)$u->is_admin === true) return;
 
-        // 2) role/rol con variantes
         $role = strtolower((string)($u->role ?? $u->rol ?? ''));
         if (in_array($role, ['admin','administrador','administradora','superadmin','super administrador','adm'], true)) return;
 
         abort(403, 'Solo administradores pueden acceder a Proveedores.');
     }
 
-    /** Lista principal (+ filtro ?q=) */
+    /** INDEX → lista con filtro ?q= */
     public function index(Request $request)
     {
         $q = (string) $request->get('q', '');
@@ -101,9 +100,20 @@ class ProveedorController extends Controller
         return response()->json(['ok'=>true,'message'=>'Proveedor actualizado correctamente.','proveedor'=>$proveedor->refresh()]);
     }
 
-    /** DESTROY → eliminar proveedor (soft delete) (JSON) */
+    /** DESTROY → soft delete (con bloqueo si está en uso) */
     public function destroy(Proveedor $proveedor)
     {
+        // Si el proveedor está referenciado, devolvemos 409
+        $enMovimientos = $proveedor->movimientos()->exists();
+        $enListas      = $proveedor->listaItems()->exists();
+
+        if ($enMovimientos || $enListas) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se puede eliminar: el proveedor está referenciado por movimientos o listas.'
+            ], 409);
+        }
+
         $proveedor->delete();
         return response()->json(['ok'=>true,'message'=>'Proveedor eliminado correctamente.']);
     }

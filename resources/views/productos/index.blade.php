@@ -6,29 +6,63 @@
 @php
   $ES_ADMIN = (isset(auth()->user()->is_admin) && auth()->user()->is_admin)
               || (strtolower(auth()->user()->role ?? auth()->user()->rol ?? '') === 'admin');
+
+  $low = $low ?? false;
+  $idsEnLista = collect($idsEnLista ?? [])->map(fn($v)=>(int)$v)->all();
+
+  // Bajo stock debe ser <=
+  $totalBajo = collect($productos)->filter(fn($p)=> (int)$p->existencias <= (int)$p->stock_minimo)->count();
 @endphp
 
 <style>
-  :root{ --cafe:#8b5e3c; --hover:#70472e; --texto:#5c3a21; --borde:#d9c9b3; --bad:#e74c3c; --ok:#2ecc71; --warn:#f1c40f; }
+  :root{
+    --cafe:#8b5e3c; --hover:#70472e; --texto:#3a281c; --borde:#d9c9b3;
+    --bad:#e74c3c; --ok:#2ecc71; --warn:#f1c40f;
+    --bg:#fffaf3; --glass:#ffffffcc; --shadow:0 16px 40px rgba(139,94,60,.14);
+  }
+
   h1.page{color:var(--cafe);margin:0 0 14px;font-size:32px;font-weight:800}
-  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-  .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none;transition:transform .08s ease, box-shadow .12s ease}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .searchbar{
+    flex:1 1 620px; display:flex; align-items:center; gap:10px; padding:10px;
+    background:linear-gradient(180deg,#fff, #fffaf4); border:1px solid var(--borde);
+    border-radius:14px; box-shadow: 0 8px 22px rgba(0,0,0,.06);
+  }
+  .s-field{ position:relative; flex:1; display:flex; align-items:center;
+    background:#fff; border:1px solid var(--borde); border-radius:12px; padding:8px 12px 8px 38px; }
+  .s-field input{ width:100%; border:none; outline:0; font-size:14.5px; color:var(--texto); background:transparent; }
+  .s-ico{ position:absolute; left:12px; top:50%; transform:translateY(-50%); width:18px; height:18px; opacity:.65; }
+
+  .s-switch{display:flex; align-items:center; gap:10px; padding:6px 10px; border:1px solid var(--borde); border-radius:999px; background:#fff;}
+  .s-switch input{display:none}
+  .s-toggle{ width:44px; height:24px; border-radius:999px; background:#e9e2d7; border:1px solid var(--borde); position:relative; transition:.18s ease all; }
+  .s-toggle::after{ content:""; position:absolute; top:50%; left:3px; transform:translateY(-50%); width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.12); transition:.18s ease all; }
+  .s-switch input:checked + .s-toggle{ background:#e8f5e9; border-color:#b4e0c1; }
+  .s-switch input:checked + .s-toggle::after{ left:22px; }
+  .s-label{font-weight:700; color:#6f533f; white-space:nowrap}
+  .s-badge{ font-weight:800; font-size:12px; color:#a32121; background:#fdecec; border:1px solid #f5c6cb; padding:3px 8px; border-radius:999px; }
+
+  .s-actions{display:flex; gap:8px}
+  .btn{ display:inline-flex;align-items:center;gap:8px;border:none;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer; text-decoration:none;transition:transform .08s ease, box-shadow .12s ease }
   .btn:hover{transform:translateY(-1px)}
   .btn-primary{background:var(--cafe);color:#fff}.btn-primary:hover{background:var(--hover)}
+  .btn-gray{background:#6c757d;color:#fff}.btn-gray:hover{filter:brightness(.95)}
   .btn-ghost{background:#fff;border:1px solid var(--borde);color:#70472e}.btn-ghost:hover{background:#f3eadd}
   .btn-danger{background:var(--bad);color:#fff}.btn-danger:hover{filter:brightness(.92)}
-  .btn-gray{background:#6c757d;color:#fff}.btn-gray:hover{filter:brightness(.95)}
   .btn-xs{padding:6px 10px;border-radius:10px;font-size:12px}
   .pill{padding:8px 12px;border-radius:12px;border:1px solid var(--borde);background:#fff;color:#70472e;font-weight:700}
   .pill:hover{background:#f2e8db}
+
   .card{background:#fff;border:1px solid var(--borde);border-radius:16px;box-shadow:0 10px 28px rgba(0,0,0,.08);padding:16px}
+
   .table{width:100%;border-collapse:collapse}
   .table th,.table td{border:1px solid var(--borde);padding:10px;text-align:center}
   .table th{background:#8b5e3c;color:#fff}
   .table tr:nth-child(even){background:#faf6ef}
+  .table-wrap{width:100%;overflow-x:auto}
   .tag-alerta{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid #f5c6cb;color:#a32121;background:#fdecec;font-weight:700;font-size:12px}
-  .search{display:flex;gap:8px;flex-wrap:wrap}
-  .search input{border:1px solid var(--borde);border-radius:12px;padding:10px 12px;min-width:260px}
+  .muted{color:#7a6b5f}
 
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:9999;display:none;align-items:center;justify-content:center;padding:14px}
   .overlay.show{display:flex}
@@ -40,63 +74,94 @@
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .grid2 label{font-weight:700;color:#7a6b5f}
   .grid2 input,.grid2 select{width:100%;border:1px solid var(--borde);border-radius:12px;padding:10px 12px;background:#fff;}
-  @media(max-width:760px){.table thead{display:none}.table tr{display:block;border:1px solid var(--borde);margin-bottom:10px;border-radius:12px;overflow:hidden}
+
+  @media(max-width:860px){ .searchbar{flex:1 1 100%} }
+  @media(max-width:760px){
+    .table thead{display:none}
+    .table tr{display:block;border:1px solid var(--borde);margin-bottom:10px;border-radius:12px;overflow:hidden}
     .table td{display:flex;justify-content:space-between;gap:12px;border:none;border-bottom:1px solid #eee}
-    .table td:last-child{border-bottom:none}.table td::before{content:attr(data-label);font-weight:700;color:#7a6b5f}
-    .grid2{grid-template-columns:1fr}}
+    .table td:last-child{border-bottom:none}
+    .table td::before{content:attr(data-label);font-weight:700;color:#7a6b5f}
+    .grid2{grid-template-columns:1fr}
+  }
 </style>
 
 <h1 class="page">Inventario de Productos</h1>
 
 <div class="toolbar">
-  <form class="search" action="{{ route('productos.index') }}" method="GET">
-    <input type="text" name="q" value="{{ $q ?? '' }}" placeholder="Filtrar (código, nombre, categoría, unidad)">
-    <button class="btn btn-primary" type="submit">Buscar</button>
-    @if(($q ?? '')!=='')
-      <a class="btn btn-gray" href="{{ route('productos.index') }}" type="button">Limpiar</a>
-    @endif
+  {{-- ======== BUSCADOR ======== --}}
+  <form class="searchbar" action="{{ route('productos.index') }}" method="GET">
+    <div class="s-field">
+      <svg class="s-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <circle cx="11" cy="11" r="7" stroke-width="2"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2"></line>
+      </svg>
+      <input type="text" name="q" value="{{ $q ?? '' }}" placeholder="Filtrar (código, nombre, categoría, unidad)">
+    </div>
+
+    <label class="s-switch" title="Mostrar únicamente materias primas con existencias por debajo (o igual) al stock mínimo">
+      <input type="checkbox" name="low" value="1" {{ $low ? 'checked' : '' }}>
+      <span class="s-toggle"></span>
+      <span class="s-label">Solo bajo stock</span>
+      <span class="s-badge">{{ $totalBajo }}</span>
+    </label>
+
+    <div class="s-actions">
+      <button class="btn btn-primary" type="submit">Buscar</button>
+      @if(($q ?? '')!=='' || $low)
+        <a class="btn btn-gray" href="{{ route('productos.index') }}" type="button">Limpiar</a>
+      @endif
+    </div>
   </form>
+
   @if($ES_ADMIN)
     <button class="btn btn-primary" id="btnNuevo" type="button">Nuevo producto</button>
   @endif
 </div>
 
 <div class="card">
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Código</th><th>Nombre</th><th>Unidad</th><th>Categoría</th><th>Existencias</th><th>Stock mínimo</th><th style="min-width:260px">Acciones</th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      @forelse($productos as $p)
-      @php $alerta = (int)$p->existencias < (int)$p->stock_minimo; @endphp
-      <tr data-id="{{ $p->id }}" data-alerta="{{ $alerta ? '1':'0' }}">
-        <td class="codigo" data-label="Código">{{ $p->codigo }}</td>
-        <td class="nombre" data-label="Nombre">
-          {{ $p->nombre }} @if($alerta)<span class="tag-alerta" title="Bajo stock">⚠ Bajo</span>@endif
-        </td>
-        <td class="unidad" data-label="Unidad">{{ $p->unidad->descripcion ?? '-' }}</td>
-        <td class="categoria" data-label="Categoría">{{ $p->categoria->nombre ?? '-' }}</td>
-        <td class="existencias" data-label="Existencias">{{ $p->existencias }}</td>
-        <td class="stock_minimo" data-label="Stock mínimo">{{ $p->stock_minimo }}</td>
-        <td data-label="Acciones" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button class="pill" data-ver="{{ $p->id }}" type="button">Ver</button>
-          <a class="pill" href="{{ route('kardex.producto',$p->id) }}">Kardex</a>
-          @if($ES_ADMIN)
-            <button class="btn btn-primary btn-xs" data-editar="{{ $p->id }}" type="button">Editar</button>
-            <button class="btn btn-danger btn-xs" data-eliminar="{{ $p->id }}" type="button">Eliminar</button>
-            @if($alerta)
-              <button class="btn btn-ghost btn-xs" data-addlist="{{ $p->id }}" type="button">Agregar a lista</button>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Código</th><th>Nombre</th><th>Unidad</th><th>Categoría</th><th>Existencias</th><th>Stock mínimo</th><th style="min-width:260px">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        @forelse($productos as $p)
+        @php
+          $alerta  = (int)$p->existencias <= (int)$p->stock_minimo;  // <= aquí
+          $enLista = in_array((int)$p->id, $idsEnLista, true);
+        @endphp
+        <tr data-id="{{ $p->id }}" data-alerta="{{ $alerta ? '1':'0' }}">
+          <td class="codigo" data-label="Código">{{ $p->codigo }}</td>
+          <td class="nombre" data-label="Nombre">
+            {{ $p->nombre }} @if($alerta)<span class="tag-alerta" title="Bajo stock">⚠ Bajo</span>@endif
+          </td>
+          <td class="unidad" data-label="Unidad">{{ $p->unidad->descripcion ?? '-' }}</td>
+          <td class="categoria" data-label="Categoría">{{ $p->categoria->nombre ?? '-' }}</td>
+          <td class="existencias" data-label="Existencias">{{ $p->existencias }}</td>
+          <td class="stock_minimo" data-label="Stock mínimo">{{ $p->stock_minimo }}</td>
+          <td data-label="Acciones" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <button class="pill" data-ver="{{ $p->id }}" type="button">Ver</button>
+            <a class="pill" href="{{ route('kardex.producto',$p->id) }}">Kardex</a>
+            @if($ES_ADMIN)
+              <button class="btn btn-primary btn-xs" data-editar="{{ $p->id }}" type="button">Editar</button>
+              <button class="btn btn-danger btn-xs" data-eliminar="{{ $p->id }}" type="button">Eliminar</button>
+              @if($alerta && !$enLista)
+                <button class="btn btn-ghost btn-xs" data-addlist="{{ $p->id }}" type="button">Agregar a lista</button>
+              @elseif($alerta && $enLista)
+                <span class="muted" data-enlista="{{ $p->id }}">En lista</span>
+              @endif
             @endif
-          @endif
-        </td>
-      </tr>
-      @empty
-        <tr><td colspan="7" style="text-align:center;color:#7a6b5f">No hay productos registrados.</td></tr>
-      @endforelse
-    </tbody>
-  </table>
+          </td>
+        </tr>
+        @empty
+          <tr><td colspan="7" style="text-align:center;color:#7a6b5f">No hay productos registrados.</td></tr>
+        @endforelse
+      </tbody>
+    </table>
+  </div>
 </div>
 
 {{-- ===== Modal CREAR ===== --}}
@@ -260,11 +325,11 @@
   </div>
 </div>
 
-{{-- ===== MODAL: Agregar a nueva lista ===== --}}
+{{-- ===== MODAL: Agregar a lista ===== --}}
 <div class="overlay" id="ovAddList">
   <div class="modal-card">
     <div class="modal-head">
-      <h3>Agregar a nueva lista</h3>
+      <h3>Agregar a lista</h3>
       <button class="close-x" data-close>&times;</button>
     </div>
     <form id="form-addlist" class="grid2">
@@ -322,11 +387,17 @@
   // ===== Fetch helpers
   function post(url, body){
     return fetch(url,{method:'POST',headers:{'X-CSRF-TOKEN':token,'Accept':'application/json'},body})
-      .then(r=>r.json().catch(()=>({})).then(js=>({ok:r.ok && js && js.ok===true, js})));
+      .then(async r=>{
+        const js = await r.json().catch(()=>null);
+        return {ok: r.ok && (js?.ok ?? true), status:r.status, js};
+      });
   }
   function del(url){
     return fetch(url,{method:'DELETE',headers:{'X-CSRF-TOKEN':token,'Accept':'application/json'}})
-      .then(r=>r.json().catch(()=>({})).then(js=>({ok:r.ok && js && js.ok===true, js})));
+      .then(async r=>{
+        const js = await r.json().catch(()=>null);
+        return {ok: r.ok && (js?.ok ?? true), status:r.status, js};
+      });
   }
 
   // ===== Crear
@@ -335,7 +406,7 @@
     e.preventDefault();
     post("{{ route('productos.store') }}", new FormData(fCrear)).then(res=>{
       if(!res.ok){
-        const msg = res.js?.errors ? Object.values(res.js.errors).flat().join('\n') : (res.js.message||'Error al crear');
+        const msg = res.js?.errors ? Object.values(res.js.errors).flat().join('\n') : (res.js?.message||'Error al crear');
         return alert(msg);
       }
       addOrUpdateRow(res.js.producto);
@@ -357,13 +428,14 @@
       $('#del-name').textContent = tr.querySelector('.nombre')?.textContent?.trim() || 'este producto';
       return openModal('#ovDelete');
     }
-    if(btn.hasAttribute('data-addlist'))  return addToList(id);
+    if(btn.hasAttribute('data-addlist'))  return addToList(id, btn);
   });
 
   // Confirmar eliminar
   $('#btnConfirmDelete')?.addEventListener('click', ()=>{
     if(!deleteId) return;
-    post('/productos/'+encodeURIComponent(deleteId), new URLSearchParams('_method=DELETE')).then(res=>{
+    const body = new FormData(); body.append('_method','DELETE');
+    post('/productos/'+encodeURIComponent(deleteId), body).then(res=>{
       if(res.ok){
         document.querySelector(`tr[data-id="${deleteId}"]`)?.remove();
       } else {
@@ -380,7 +452,7 @@
       .then(r=>r.json()).then(res=>{
         if(res.ok===false) return alert(res.message||'No se pudo cargar');
         const p = res.producto || res;
-        const alerta = (def(p.existencias,0) < def(p.stock_minimo,0)) ? '<div class="tag-alerta" style="margin-top:6px">⚠ Bajo stock</div>' : '';
+        const alerta = (Number(p.existencias||0) <= Number(p.stock_minimo||0)) ? '<div class="tag-alerta" style="margin-top:6px">⚠ Bajo stock</div>' : '';
         $('#ver-body').innerHTML =
           `<ul style="list-style:disc;padding-left:18px;line-height:1.9">
             <li><strong>Código:</strong> ${def(p.codigo)}</li>
@@ -396,7 +468,7 @@
       });
   }
 
-  // ===== Editar (cargar/guardar)
+  // ===== Editar
   function editar(id){
     fetch('/productos/'+encodeURIComponent(id)+'/edit', { headers:{ 'Accept':'application/json' }})
       .then(r=>r.json()).then(res=>{
@@ -428,13 +500,13 @@
     }).catch(()=>alert('Error de red'));
   });
 
-  // ===== Crear Unidad
+  // ===== Crear/Eliminar Unidades y Categorías
   const fUnidad = $('#form-unidad');
   fUnidad?.addEventListener('submit', e=>{
     e.preventDefault();
     post("{{ route('productos.unidades.inline') }}", new FormData(fUnidad)).then(res=>{
       if(!res.ok){
-        const msg = res.js?.errors ? Object.values(res.js.errors).flat().join('\n') : (res.js.message||'No se pudo crear unidad');
+        const msg = res.js?.errors ? Object.values(res.js.errors).flat().join('\n') : (res.js?.message||'No se pudo crear unidad');
         return alert(msg);
       }
       const u = res.js.unidad;
@@ -449,32 +521,33 @@
     }).catch(()=>alert('Error de red'));
   });
 
-  // ===== Eliminar Unidad (select)
-  function handleDeleteUnidad(selectId){
-    const sel = document.getElementById(selectId);
-    const val = sel?.value || '';
-    if(!val) return alert('Selecciona una unidad.');
-    if(!confirm('¿Eliminar esta unidad? Si está en uso por productos, no se podrá borrar.')) return;
-    del('/productos/unidades/'+encodeURIComponent(val)).then(res=>{
-      if(!res.ok) return alert(res.js?.message || 'No se pudo eliminar unidad');
-      // quitar opción en ambos selects
-      ['create-unidad','edit-unidad'].forEach(id=>{
-        const s = document.getElementById(id);
-        s?.querySelector(`option[value="${val}"]`)?.remove();
-      });
-      alert('Unidad eliminada.');
+  function delReq(url, okMsg){
+    return del(url).then(res=>{
+      if(!res.ok) return alert(res.js?.message || 'Acción no realizada');
+      alert(okMsg);
     }).catch(()=>alert('Error de red'));
   }
-  $('#btnBorrarUnidad')?.addEventListener('click', ()=>handleDeleteUnidad('create-unidad'));
-  $('#btnBorrarUnidad2')?.addEventListener('click', ()=>handleDeleteUnidad('edit-unidad'));
+  $('#btnBorrarUnidad')?.addEventListener('click', ()=>{
+    const sel = document.getElementById('create-unidad'); const val = sel?.value || '';
+    if(!val) return alert('Selecciona una unidad.');
+    if(!confirm('¿Eliminar esta unidad?')) return;
+    delReq('/productos/unidades/'+encodeURIComponent(val), 'Unidad eliminada.');
+    ['create-unidad','edit-unidad'].forEach(id=>document.getElementById(id)?.querySelector(`option[value="${val}"]`)?.remove());
+  });
+  $('#btnBorrarUnidad2')?.addEventListener('click', ()=>{
+    const sel = document.getElementById('edit-unidad'); const val = sel?.value || '';
+    if(!val) return alert('Selecciona una unidad.');
+    if(!confirm('¿Eliminar esta unidad?')) return;
+    delReq('/productos/unidades/'+encodeURIComponent(val), 'Unidad eliminada.');
+    ['create-unidad','edit-unidad'].forEach(id=>document.getElementById(id)?.querySelector(`option[value="${val}"]`)?.remove());
+  });
 
-  // ===== Crear Categoría
   const fCat = $('#form-categoria');
   fCat?.addEventListener('submit', e=>{
     e.preventDefault();
     post("{{ route('productos.categorias.inline') }}", new FormData(fCat)).then(res=>{
       if(!res.ok){
-        const msg = res.js?.errors ? Object.values(res.js.errors).flat().join('\n') : (res.js.message||'No se pudo crear categoría');
+        const msg = res.js?.errors ? Object.values(res.js.errors).flat().join('\n') : (res.js?.message||'No se pudo crear categoría');
         return alert(msg);
       }
       const c = res.js.categoria;
@@ -488,52 +561,83 @@
       closeModal(fCat); fCat.reset();
     }).catch(()=>alert('Error de red'));
   });
-
-  // ===== Eliminar Categoría (select)
-  function handleDeleteCategoria(selectId){
-    const sel = document.getElementById(selectId);
-    const val = sel?.value || '';
+  $('#btnBorrarCategoria')?.addEventListener('click', ()=>{
+    const sel = document.getElementById('create-categoria'); const val = sel?.value || '';
     if(!val) return alert('Selecciona una categoría.');
-    if(!confirm('¿Eliminar esta categoría? Si está en uso por productos, no se podrá borrar.')) return;
-    del('/productos/categorias/'+encodeURIComponent(val)).then(res=>{
-      if(!res.ok) return alert(res.js?.message || 'No se pudo eliminar categoría');
-      ['create-categoria','edit-categoria'].forEach(id=>{
-        const s = document.getElementById(id);
-        s?.querySelector(`option[value="${val}"]`)?.remove();
-      });
-      alert('Categoría eliminada.');
-    }).catch(()=>alert('Error de red'));
-  }
-  $('#btnBorrarCategoria')?.addEventListener('click', ()=>handleDeleteCategoria('create-categoria'));
-  $('#btnBorrarCategoria2')?.addEventListener('click', ()=>handleDeleteCategoria('edit-categoria'));
+    if(!confirm('¿Eliminar esta categoría?')) return;
+    delReq('/productos/categorias/'+encodeURIComponent(val), 'Categoría eliminada.');
+    ['create-categoria','edit-categoria'].forEach(id=>document.getElementById(id)?.querySelector(`option[value="${val}"]`)?.remove());
+  });
+  $('#btnBorrarCategoria2')?.addEventListener('click', ()=>{
+    const sel = document.getElementById('edit-categoria'); const val = sel?.value || '';
+    if(!val) return alert('Selecciona una categoría.');
+    if(!confirm('¿Eliminar esta categoría?')) return;
+    delReq('/productos/categorias/'+encodeURIComponent(val), 'Categoría eliminada.');
+    ['create-categoria','edit-categoria'].forEach(id=>document.getElementById(id)?.querySelector(`option[value="${val}"]`)?.remove());
+  });
 
-  // ===== Agregar a lista (modal)
+  // ===== Agregar a lista
   const fAddList = $('#form-addlist');
-  let currentProd = null;
-  function addToList(id){
+  let currentProd = null, currentBtn = null;
+
+  function addToList(id, btn){
     currentProd = id;
+    currentBtn  = btn;
     $('#addlist-prod').value = id;
     $('#addlist-cant').value = '';
     $('#addlist-prov').value = '';
     $('#addlist-precio').value = '';
     openModal('#ovAddList');
   }
+
   fAddList?.addEventListener('submit', e=>{
     e.preventDefault();
     const fd = new FormData(fAddList);
-    fetch('/listas/quick-add/'+encodeURIComponent(currentProd), {
+    fetch('{{ route('listas.quickadd', ['producto' => 'PID']) }}'.replace('PID', encodeURIComponent(currentProd)), {
       method:'POST', headers:{'X-CSRF-TOKEN':token,'Accept':'application/json'}, body: fd
-    }).then(r=>r.json()).then(res=>{
-      if(!res.ok) return alert(res.message || 'No se pudo agregar');
-      alert('Producto agregado correctamente a nueva lista (ID '+res.lista_id+').');
+    }).then(async r=>{
+      const js = await r.json().catch(()=>null);
+      if(r.status === 409){
+        alert(js?.message || 'Este producto ya está en tu lista.');
+        markAsInList(currentProd, currentBtn);
+        return;
+      }
+      if(!r.ok || !js?.ok){
+        return alert(js?.message || 'No se pudo agregar');
+      }
+      markAsInList(js.producto_id ?? currentProd, currentBtn);
+      alert('Producto agregado a tu lista en borrador (ID '+(js.lista_id||'')+').');
       closeModal(fAddList); fAddList.reset();
     }).catch(()=>alert('Error de red'));
   });
 
-  // ===== Actualiza/Inserta fila en tabla
+  function markAsInList(pid, btn){
+    if(btn){
+      const holder = btn.parentElement;
+      btn.remove();
+      const span = document.createElement('span');
+      span.className = 'muted';
+      span.setAttribute('data-enlista', pid);
+      span.textContent = 'En lista';
+      holder.appendChild(span);
+    }else{
+      const row = document.querySelector(`tr[data-id="${pid}"]`);
+      const add = row?.querySelector('[data-addlist]');
+      if(add){
+        const holder = add.parentElement;
+        add.remove();
+        const span = document.createElement('span');
+        span.className = 'muted';
+        span.setAttribute('data-enlista', pid);
+        span.textContent = 'En lista';
+        holder.appendChild(span);
+      }
+    }
+  }
+
   function addOrUpdateRow(p){
     const tr = document.querySelector(`tr[data-id="${p.id}"]`);
-    const alerta = (Number(p.existencias||0) < Number(p.stock_minimo||0));
+    const alerta = (Number(p.existencias||0) <= Number(p.stock_minimo||0)); // <= aquí
     const cat = p.categoria ? p.categoria.nombre : (p.categoria_nombre || '-');
     const uni = p.unidad ? p.unidad.descripcion : (p.unidad_descripcion || '-');
 
@@ -549,7 +653,6 @@
       return;
     }
 
-    // si no existe, lo insertamos al inicio
     const row = document.createElement('tr');
     row.setAttribute('data-id', p.id);
     row.setAttribute('data-alerta', alerta ? '1':'0');

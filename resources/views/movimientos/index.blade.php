@@ -6,7 +6,6 @@
 @php
   $ES_ADMIN = (isset(auth()->user()->is_admin) && auth()->user()->is_admin)
               || (strtolower(auth()->user()->role ?? auth()->user()->rol ?? '') === 'admin');
-  // Evita errores si aún no mandas estos datasets desde el controlador:
   $productos  = $productos  ?? collect();
   $proveedors = $proveedors ?? collect();
 @endphp
@@ -37,8 +36,6 @@
   .salida{border-color:var(--bad);color:var(--bad)}
   .confirmado{border-color:var(--ok);color:var(--ok)}
   .cancelado{border-color:var(--bad);color:var(--bad);background:#fcebea}
-
-  /* Modal (glass) */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:90;display:none;align-items:center;justify-content:center;padding:14px}
   .overlay.show{display:flex}
   .modal-card{
@@ -63,7 +60,6 @@
     width:100%;border:1px solid var(--borde);border-radius:12px;padding:10px 12px;background:#fff;
   }
   .muted{color:#7a6b5f}
-
   @media(max-width:760px){
     .table thead{display:none}
     .table tr{display:block;border:1px solid var(--borde);margin-bottom:10px;border-radius:12px;overflow:hidden}
@@ -83,12 +79,14 @@
       <option value="entrada" {{ request('tipo')=='entrada'?'selected':'' }}>Entradas</option>
       <option value="salida"  {{ request('tipo')=='salida'?'selected':''  }}>Salidas</option>
     </select>
+
+    {{-- SOLO Confirmado / Cancelado --}}
     <select name="status">
       <option value="">Estatus (todos)</option>
-      <option value="pendiente"  {{ request('status')=='pendiente'?'selected':'' }}>Pendiente</option>
       <option value="confirmado" {{ request('status')=='confirmado'?'selected':'' }}>Confirmado</option>
-      <option value="cancelado"  {{ request('status')=='cancelado'?'selected':'' }}>Cancelado</option>
+      <option value="cancelado"  {{ request('status')=='cancelado'?'selected':''  }}>Cancelado</option>
     </select>
+
     <input type="text" name="q" placeholder="Buscar producto o usuario" value="{{ request('q') }}">
     <button type="submit" class="btn btn-primary">Filtrar</button>
     <a href="{{ route('movimientos.index') }}" class="btn btn-gray">Limpiar</a>
@@ -170,7 +168,7 @@
         <select name="producto_id" id="mov-producto" required>
           <option value="">— Selecciona —</option>
           @foreach($productos as $p)
-            <option value="{{ $p->id }}">{{ $p->nombre }} (Stock: {{ $p->existencias }})</option>
+            <option value="{{ $p->id }}">{{ $p->codigo }} — {{ $p->nombre }} (Stock: {{ $p->existencias }})</option>
           @endforeach
         </select>
       </label>
@@ -227,30 +225,27 @@
   const token = '{{ csrf_token() }}';
   const isAdmin = {{ $ES_ADMIN ? 'true' : 'false' }};
 
-  // Modal helpers
-  function open(){ $('#ovNuevo').classList.add('show'); }
-  function close(){ $('#ovNuevo').classList.remove('show'); }
+  // Modal
+  function open(){ $('#ovNuevo')?.classList.add('show'); }
+  function close(){ $('#ovNuevo')?.classList.remove('show'); }
   $('#btnNuevo')?.addEventListener('click', open);
   $$('#ovNuevo [data-close]').forEach(b => b.addEventListener('click', close));
   window.addEventListener('keydown', e => { if(e.key==='Escape') close(); });
 
-  // Reglas UI según tipo
+  // UI proveedor según tipo
   const tipoSel = $('#mov-tipo');
   const provSel = $('#mov-proveedor');
-
   function toggleProveedor(){
-    // Si es entrada, proveedor es útil; si es salida, puede quedar opcional
     const t = (tipoSel?.value || 'salida');
     provSel?.closest('label').classList.toggle('muted', t !== 'entrada');
   }
   tipoSel?.addEventListener('change', toggleProveedor);
   toggleProveedor();
 
-  // Cálculo costo total
+  // Cálculo de total
   const cant = $('#mov-cantidad');
   const precio = $('#mov-precio');
   const total = $('#mov-total');
-
   function calcTotal(){
     const c = parseFloat(cant.value || '0');
     const p = parseFloat(precio.value || '0');
@@ -261,12 +256,10 @@
   precio?.addEventListener('input', calcTotal);
   calcTotal();
 
-  // Enviar
+  // Envío
   $('#form-nuevo')?.addEventListener('submit', function(e){
     e.preventDefault();
     const fd = new FormData(this);
-
-    // Si no es admin, fuerza salida (doble seguridad de UI)
     if(!isAdmin) { fd.set('tipo','salida'); }
 
     fetch(`{{ route('movimientos.store') }}`, {
@@ -274,11 +267,8 @@
       headers:{ 'X-CSRF-TOKEN': token, 'Accept':'application/json' },
       body: fd
     }).then(async r=>{
-      if(r.ok){
-        // Recargamos para ver la nueva fila (tu controller redirige con flash).
-        // Si quieres evitar recargar, podemos devolver JSON desde el controller en el futuro.
-        location.reload();
-      }else{
+      if(r.ok){ location.reload(); }
+      else{
         const js = await r.json().catch(()=>null);
         alert(js?.message || 'No se pudo guardar el movimiento.');
       }

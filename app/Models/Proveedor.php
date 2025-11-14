@@ -10,10 +10,12 @@ class Proveedor extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $table = 'proveedors'; 
+    // Mantengo tu pluralización actual
+    protected $table = 'proveedors';
 
     protected $fillable = ['nombre','telefono','correo','direccion','notas'];
 
+    // Relaciones
     public function movimientos()
     {
         return $this->hasMany(Movimiento::class, 'proveedor_id');

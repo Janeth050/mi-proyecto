@@ -13,8 +13,6 @@
   .kpinum{font-size:28px;font-weight:800;color:var(--cafe);margin-top:4px}
   h1.page{color:var(--cafe);margin:0 0 14px;font-size:32px;font-weight:800}
   h3.cardtitle{margin:0 0 10px;color:#5c3a21}
-
-  /* tablas */
   .table{width:100%;border-collapse:collapse}
   .table th,.table td{border:1px solid var(--borde);padding:8px;text-align:center}
   .table th{background:var(--cafe);color:#fff}
@@ -23,13 +21,12 @@
   .chip.entrada{border-color:var(--ok);color:var(--ok)}
   .chip.salida{border-color:var(--bad);color:var(--bad)}
   .alerta{color:#fff;background:var(--bad);padding:4px 8px;border-radius:999px}
-
-  /* contenedor de gráficas: evita que crezcan */
+  .notice{background:#fff6e6;border:1px solid #f2d4a6;color:#6b4b20;border-radius:12px;padding:10px 12px;margin-bottom:12px}
+  .notice a{color:#6b4b20;font-weight:800;text-decoration:underline}
   .chart-card{display:block}
-  .chart-box{position:relative;height:320px; /* ALTURA CONTROLADA */ }
+  .chart-box{position:relative;height:320px}
   .chart-box canvas{width:100% !important;height:100% !important;display:block}
-
-  /* responsive */
+  .table-wrap{width:100%;overflow-x:auto}
   @media (max-width: 1100px){ .cards{grid-template-columns:repeat(2,1fr)} }
   @media (max-width: 760px){
     .cards{grid-template-columns:1fr}
@@ -42,7 +39,19 @@
   }
 </style>
 
+@php
+  $isAdmin = strtolower(auth()->user()->role ?? '') === 'admin';
+  $tz = config('app.timezone', 'America/Monterrey');
+@endphp
+
 <h1 class="page">Dashboard</h1>
+
+@if($isAdmin && empty(auth()->user()->whatsapp_phone))
+  <div class="notice">
+    Configura el <strong>número de WhatsApp</strong> para recibir alertas de bajo stock y listas:
+    <a href="{{ route('settings.notifications') }}">Ajustes → Notificaciones</a>
+  </div>
+@endif
 
 {{-- KPIs --}}
 <div class="grid cards">
@@ -56,45 +65,49 @@
 <div class="grid two" style="margin-top:14px">
   <div class="card">
     <h3 class="cardtitle">Alerta: Bajo stock</h3>
-    <table class="table">
-      <thead><tr><th>Producto</th><th>Unidad</th><th>Existencias</th><th>Mínimo</th></tr></thead>
-      <tbody>
-        @forelse($bajo as $p)
-          <tr>
-            <td data-label="Producto">{{ $p->nombre }}</td>
-            <td data-label="Unidad">{{ $p->unidad->clave ?? '-' }}</td>
-            <td data-label="Existencias"><span class="alerta">{{ $p->existencias }}</span></td>
-            <td data-label="Mínimo">{{ $p->stock_minimo }}</td>
-          </tr>
-        @empty
-          <tr><td colspan="4" style="text-align:center">No hay productos en alerta 🎉</td></tr>
-        @endforelse
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Producto</th><th>Unidad</th><th>Existencias</th><th>Mínimo</th></tr></thead>
+        <tbody>
+          @forelse($bajo as $p)
+            <tr>
+              <td data-label="Producto">{{ $p->nombre }}</td>
+              <td data-label="Unidad">{{ $p->unidad->clave ?? '-' }}</td>
+              <td data-label="Existencias"><span class="alerta">{{ $p->existencias }}</span></td>
+              <td data-label="Mínimo">{{ $p->stock_minimo }}</td>
+            </tr>
+          @empty
+            <tr><td colspan="4" style="text-align:center">No hay productos en alerta 🎉</td></tr>
+          @endforelse
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="card">
     <h3 class="cardtitle">Últimos movimientos</h3>
-    <table class="table">
-      <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cant.</th><th>Usuario</th></tr></thead>
-      <tbody>
-        @forelse($ultimos as $m)
-          <tr>
-            <td data-label="Fecha">{{ $m->created_at->format('d/m/Y H:i') }}</td>
-            <td data-label="Tipo"><span class="chip {{ $m->tipo }}">{{ ucfirst($m->tipo) }}</span></td>
-            <td data-label="Producto">{{ $m->producto->nombre ?? '-' }}</td>
-            <td data-label="Cant.">{{ $m->cantidad }}</td>
-            <td data-label="Usuario">{{ $m->usuario->name ?? '-' }}</td>
-          </tr>
-        @empty
-          <tr><td colspan="5" style="text-align:center">Sin movimientos recientes.</td></tr>
-        @endforelse
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cant.</th><th>Usuario</th></tr></thead>
+        <tbody>
+          @forelse($ultimos as $m)
+            <tr>
+              <td data-label="Fecha">{{ $m->created_at->timezone($tz)->format('d/m/Y H:i') }}</td>
+              <td data-label="Tipo"><span class="chip {{ $m->tipo }}">{{ ucfirst($m->tipo) }}</span></td>
+              <td data-label="Producto">{{ $m->producto->nombre ?? '-' }}</td>
+              <td data-label="Cant.">{{ $m->cantidad }}</td>
+              <td data-label="Usuario">{{ $m->usuario->name ?? '-' }}</td>
+            </tr>
+          @empty
+            <tr><td colspan="5" style="text-align:center">Sin movimientos recientes.</td></tr>
+          @endforelse
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
-{{-- Gráficas (con contenedor de altura fija) --}}
+{{-- Gráficas --}}
 <div class="grid two" style="margin-top:14px">
   <div class="card chart-card">
     <h3 class="cardtitle">Top usados (salidas) — 30 días</h3>
@@ -118,7 +131,7 @@
     data: { labels: topLabels, datasets: [{ label: 'Unidades salidas', data: topData }] },
     options: {
       responsive: true,
-      maintainAspectRatio: false, // <— clave
+      maintainAspectRatio: false,
       scales: { y: { beginAtZero: true } },
       plugins: { legend: { display: true } }
     }
@@ -129,7 +142,7 @@
     data: { labels: gastoLabels, datasets: [{ label: 'Gasto ($)', data: gastoData, tension: .2 }] },
     options: {
       responsive: true,
-      maintainAspectRatio: false, // <— clave
+      maintainAspectRatio: false,
       scales: { y: { beginAtZero: true } },
       plugins: { legend: { display: true } }
     }

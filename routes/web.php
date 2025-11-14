@@ -8,11 +8,14 @@ use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\KardexController;
 use App\Http\Controllers\ListaPedidoController;
-use App\Http\Controllers\ListaPedidoItemController;
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\NotificationSettingsController;
+use App\Models\Producto;
+use App\Models\Proveedor;
 
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 
 Route::get('/__diag-gate', function () {
     $u = Auth::user();
@@ -28,11 +31,17 @@ require __DIR__ . '/auth.php';
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // ===== Productos =====
+    // ===== Ajustes por usuario (admin)
+    Route::get('/ajustes/notificaciones', [NotificationSettingsController::class, 'show'])
+        ->name('settings.notifications');
+    Route::post('/ajustes/notificaciones', [NotificationSettingsController::class, 'update'])
+        ->name('settings.notifications.save');
+
+    // ===== Productos
     Route::get('/productos/{producto}/kardex-json', [ProductoController::class, 'kardexJson'])->name('productos.kardex.json');
     Route::resource('productos', ProductoController::class);
 
-    // Inline categoría/unidad (en ProductoController)
+    // Inline categoría/unidad
     Route::post('/productos/categorias/inline', [ProductoController::class, 'storeCategoriaInline'])->name('productos.categorias.inline');
     Route::delete('/productos/categorias/{categoria}', [ProductoController::class, 'destroyCategoriaInline'])->name('productos.categorias.destroy');
 
@@ -53,26 +62,15 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/kardex', [KardexController::class, 'index'])->name('kardex.index');
     Route::get('/kardex/producto/{producto}', [KardexController::class, 'showProducto'])->name('kardex.producto');
 
-    // ===== Listas (solo admin por Gate)
+    // ===== Listas
     Route::middleware('can:manage-lists')->group(function () {
         Route::get('listas',                [ListaPedidoController::class, 'index'])->name('listas.index');
-        Route::get('listas/create',         [ListaPedidoController::class, 'create'])->name('listas.create');
-        Route::post('listas',               [ListaPedidoController::class, 'store'])->name('listas.store');
         Route::get('listas/{lista}',        [ListaPedidoController::class, 'show'])->name('listas.show');
         Route::delete('listas/{lista}',     [ListaPedidoController::class, 'destroy'])->name('listas.destroy');
 
-        Route::post('listas/{lista}/enviar',   [ListaPedidoController::class, 'enviar'])->name('listas.enviar');
-        Route::post('listas/{lista}/cerrar',   [ListaPedidoController::class, 'cerrar'])->name('listas.cerrar');
-        Route::post('listas/{lista}/cancelar', [ListaPedidoController::class, 'cancelar'])->name('listas.cancelar');
-
-        // Quick add desde Productos
-        Route::post('/listas/quick-add/{producto}', [ListaPedidoController::class, 'quickAddFromProducto'])
-            ->name('listas.quickadd');
-        
-        // Ítems de la lista
-        Route::post('listas/{lista}/items',           [ListaPedidoItemController::class, 'store'])->name('listas.items.store');
-        Route::put('listas/{lista}/items/{item}',     [ListaPedidoItemController::class, 'update'])->name('listas.items.update');
-        Route::delete('listas/{lista}/items/{item}',  [ListaPedidoItemController::class, 'destroy'])->name('listas.items.destroy');
+        Route::post('listas/{lista}/archivar', [ListaPedidoController::class, 'archivar'])->name('listas.archivar');
+        Route::post('/listas/quick-add/{producto}', [ListaPedidoController::class, 'quickAddFromProducto'])->name('listas.quickadd');
+        Route::get('listas/{lista}/export', [ListaPedidoController::class, 'exportCsv'])->name('listas.export');
     });
 
     // ===== Usuarios (solo admin)
@@ -80,6 +78,43 @@ Route::middleware(['auth'])->group(function () {
         ->parameters(['usuarios' => 'usuario'])
         ->except(['show'])
         ->middleware('can:manage-users');
+
+    // TEST: envía un WhatsApp de prueba con CallMeBot y muestra la respuesta
+Route::get('/debug/whatsapp', function () {
+    $apiKey = trim(env('CALLMEBOT_APIKEY', ''));
+    $enabled = filter_var(env('CALLMEBOT_ENABLED', false), FILTER_VALIDATE_BOOLEAN);
+
+    // usa tu número guardado en ajustes o ponlo aquí directo para probar:
+    $phone = Auth::user()?->whatsapp_phone ?? '5218122573165'; // <-- cámbialo si ocupas
+    $phone = preg_replace('/\D+/', '', $phone); // solo dígitos, SIN +
+
+    $msg = '✅ Prueba desde Laravel (debug).';
+
+    $query = http_build_query([
+        'phone'  => $phone,
+        'text'   => $msg,
+        'apikey' => $apiKey,
+    ]);
+
+    $url = "https://api.callmebot.com/whatsapp.php?".$query;
+
+    // Llamada HTTP
+    $resp = \Illuminate\Support\Facades\Http::withOptions([
+        'verify'  => false,
+        'timeout' => 20,
+    ])->get($url);
+
+    return response()->json([
+        'enabled' => $enabled,
+        'apiKey'  => $apiKey,
+        'phone'   => $phone,
+        'url'     => $url,
+        'status'  => $resp->status(),
+        'ok'      => $resp->ok(),
+        'body'    => $resp->body(),
+    ]);
+})->middleware('auth');
+
 });
 
 Route::fallback(function () { abort(404); });
